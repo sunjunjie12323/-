@@ -2,7 +2,7 @@ import asyncio
 import json
 import math
 import os
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,7 +12,6 @@ from uuid import uuid4
 from loguru import logger
 
 from app.core.knowledge_graph import KnowledgeGraph
-from app.core.llm import LLMService
 from app.core.vector_store import VectorStore
 
 
@@ -200,8 +199,7 @@ class IntelligenceOrganismEngine:
     PERSIST_FILE = "organism_state.json"
     AUTO_SAVE_INTERVAL_SECONDS = 60
 
-    def __init__(self, llm: LLMService, vector_store: VectorStore, knowledge_graph: KnowledgeGraph, persist_dir: str = None):
-        self.llm = llm
+    def __init__(self, vector_store: VectorStore, knowledge_graph: KnowledgeGraph, persist_dir: str = None):
         self.vector_store = vector_store
         self.knowledge_graph = knowledge_graph
         self.persist_dir = persist_dir or self.PERSIST_DIR
@@ -1158,11 +1156,7 @@ class IntelligenceOrganismEngine:
             logger.debug(f"Vector store evidence search failed: {exc}")
 
         if not actual_occurred and evidence:
-            try:
-                actual_occurred = await self._llm_validate_occurrence(predicted_action, evidence)
-            except Exception as exc:
-                logger.debug(f"LLM validation failed, using heuristic: {exc}")
-                actual_occurred = self._heuristic_occurrence_check(predicted_action, evidence)
+            actual_occurred = self._algorithmic_validate_occurrence(predicted_action, evidence)
 
         return evidence, actual_occurred, time_to_occurrence
 
@@ -1189,31 +1183,54 @@ class IntelligenceOrganismEngine:
 
         return evidence, actual_occurred, time_to_occurrence
 
-    async def _llm_validate_occurrence(
+    def _algorithmic_validate_occurrence(
         self, predicted_action: str, evidence: List[str]
     ) -> bool:
-        system_prompt = (
-            "你是一个威胁情报验证专家。判断以下情报证据是否表明预测的攻击行动已经实际发生。\n"
-            "只回答 '是' 或 '否'。"
-        )
-        evidence_text = "\n".join(evidence[:3])
-        prompt = (
-            f"预测的攻击行动：{predicted_action}\n\n"
-            f"情报证据：\n{evidence_text}\n\n"
-            "这些证据是否表明该攻击行动已经实际发生？"
-        )
+        action_terms = self._extract_key_terms(predicted_action)
+        if not action_terms:
+            return False
 
-        try:
-            response = await self.llm.generate(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.1,
-                max_tokens=10,
-            )
-            return "是" in response.strip()
-        except Exception as exc:
-            logger.warning(f"LLM validation call failed: {exc}")
-            raise
+        total_score = 0.0
+        for doc in evidence:
+            doc_terms = self._extract_key_terms(doc)
+            if not doc_terms:
+                continue
+
+            action_counter = Counter(action_terms)
+            doc_counter = Counter(doc_terms)
+
+            all_terms = set(action_counter.keys()) | set(doc_counter.keys())
+            dot_product = sum(action_counter[t] * doc_counter[t] for t in all_terms)
+            action_norm = math.sqrt(sum(v ** 2 for v in action_counter.values()))
+            doc_norm = math.sqrt(sum(v ** 2 for v in doc_counter.values()))
+
+            if action_norm > 0 and doc_norm > 0:
+                cosine_sim = dot_product / (action_norm * doc_norm)
+                total_score += cosine_sim
+
+        avg_score = total_score / len(evidence) if evidence else 0.0
+        return avg_score >= 0.25
+
+    def _extract_key_terms(self, text: str) -> List[str]:
+        stop_words = {
+            "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "一个",
+            "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有", "看", "好",
+            "自己", "这", "the", "a", "an", "is", "are", "was", "were", "be", "been",
+            "being", "have", "has", "had", "do", "does", "did", "will", "would",
+            "could", "should", "may", "might", "shall", "can", "need", "dare",
+            "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
+            "from", "as", "into", "through", "during", "before", "after", "above",
+            "below", "between", "out", "off", "over", "under", "again", "further",
+            "then", "once", "and", "but", "or", "nor", "not", "so", "yet", "both",
+            "either", "neither", "each", "every", "all", "any", "few", "more",
+            "most", "other", "some", "such", "no", "only", "own", "same", "than",
+            "too", "very", "just", "because", "if", "when", "where", "how", "what",
+            "which", "who", "whom", "this", "that", "these", "those", "it", "its",
+        }
+
+        import re
+        tokens = re.findall(r'[a-zA-Z_]{2,}|[\u4e00-\u9fff]{2,}', text.lower())
+        return [t for t in tokens if t not in stop_words]
 
     def _heuristic_occurrence_check(
         self, predicted_action: str, evidence: List[str]

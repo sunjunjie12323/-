@@ -22,15 +22,6 @@ from app.core.intelligence_organism import (
 )
 
 
-def _make_mock_llm():
-    llm = AsyncMock()
-    llm.generate = AsyncMock(return_value="是")
-    llm.generate_json = AsyncMock(return_value=[])
-    llm.embed = AsyncMock(return_value=[0.1] * 1536)
-    llm.embed_batch = AsyncMock(return_value=[[0.1] * 1536])
-    return llm
-
-
 def _make_mock_vector_store():
     vs = AsyncMock()
     vs.search_intelligence = AsyncMock(return_value=[])
@@ -46,13 +37,12 @@ def _make_mock_knowledge_graph():
 
 
 def _make_engine(tmp_dir=None):
-    llm = _make_mock_llm()
     vs = _make_mock_vector_store()
     kg = _make_mock_knowledge_graph()
     kwargs = {}
     if tmp_dir:
         kwargs["persist_dir"] = tmp_dir
-    engine = IntelligenceOrganismEngine(llm=llm, vector_store=vs, knowledge_graph=kg, **kwargs)
+    engine = IntelligenceOrganismEngine(vector_store=vs, knowledge_graph=kg, **kwargs)
     return engine
 
 

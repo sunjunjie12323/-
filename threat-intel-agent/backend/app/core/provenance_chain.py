@@ -1,13 +1,14 @@
 import hashlib
 import json
+import re
+from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from uuid import uuid4
 
 from loguru import logger
 
-from app.core.llm import LLMService
 from app.core.vector_store import VectorStore
 
 
@@ -20,8 +21,8 @@ class ProvenanceRecord:
     input_hash: str
     output_hash: str
     previous_record_id: Optional[str] = None
-    llm_prompt: Optional[str] = None
-    llm_response: Optional[str] = None
+    algorithm_input: Optional[str] = None
+    algorithm_output: Optional[str] = None
     confidence_before: Optional[float] = None
     confidence_after: Optional[float] = None
     operator: str = "automated"
@@ -36,8 +37,8 @@ class ProvenanceRecord:
             "input_hash": self.input_hash,
             "output_hash": self.output_hash,
             "previous_record_id": self.previous_record_id,
-            "llm_prompt": self.llm_prompt,
-            "llm_response": self.llm_response,
+            "algorithm_input": self.algorithm_input,
+            "algorithm_output": self.algorithm_output,
             "confidence_before": self.confidence_before,
             "confidence_after": self.confidence_after,
             "operator": self.operator,
@@ -50,7 +51,7 @@ class VerificationResult:
     intelligence_id: str
     is_valid: bool
     chain_length: int
-    llm_contributions: int
+    algorithm_contributions: int
     human_contributions: int
     automated_contributions: int
     tampered_steps: List[str] = field(default_factory=list)
@@ -61,7 +62,7 @@ class VerificationResult:
             "intelligence_id": self.intelligence_id,
             "is_valid": self.is_valid,
             "chain_length": self.chain_length,
-            "llm_contributions": self.llm_contributions,
+            "algorithm_contributions": self.algorithm_contributions,
             "human_contributions": self.human_contributions,
             "automated_contributions": self.automated_contributions,
             "tampered_steps": self.tampered_steps,
@@ -108,8 +109,7 @@ class HallucinationReport:
 class ProvenanceChain:
     EXPECTED_STAGES = ["collected", "cleaned", "analyzed", "report_generated"]
 
-    def __init__(self, llm: LLMService, vector_store: VectorStore):
-        self.llm = llm
+    def __init__(self, vector_store: VectorStore):
         self.vector_store = vector_store
         self._chains: Dict[str, List[ProvenanceRecord]] = {}
         self._records_by_id: Dict[str, ProvenanceRecord] = {}
@@ -125,8 +125,8 @@ class ProvenanceChain:
         stage: str,
         input_data: dict,
         output_data: dict,
-        llm_prompt: str = None,
-        llm_response: str = None,
+        algorithm_input: str = None,
+        algorithm_output: str = None,
         confidence_before: float = None,
         confidence_after: float = None,
     ) -> ProvenanceRecord:
@@ -138,8 +138,8 @@ class ProvenanceChain:
             previous_record_id = self._chains[intelligence_id][-1].id
 
         operator = "automated"
-        if llm_prompt is not None or llm_response is not None:
-            operator = "llm"
+        if algorithm_input is not None or algorithm_output is not None:
+            operator = "algorithm"
         elif stage == "collected":
             operator = "human"
 
@@ -147,12 +147,12 @@ class ProvenanceChain:
             id=uuid4().hex,
             intelligence_id=intelligence_id,
             stage=stage,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             input_hash=input_hash,
             output_hash=output_hash,
             previous_record_id=previous_record_id,
-            llm_prompt=llm_prompt,
-            llm_response=llm_response,
+            algorithm_input=algorithm_input,
+            algorithm_output=algorithm_output,
             confidence_before=confidence_before,
             confidence_after=confidence_after,
             operator=operator,
@@ -181,7 +181,7 @@ class ProvenanceChain:
                 intelligence_id=intelligence_id,
                 is_valid=False,
                 chain_length=0,
-                llm_contributions=0,
+                algorithm_contributions=0,
                 human_contributions=0,
                 automated_contributions=0,
                 tampered_steps=[],
@@ -189,13 +189,13 @@ class ProvenanceChain:
             )
 
         tampered_steps: List[str] = []
-        llm_count = 0
+        algorithm_count = 0
         human_count = 0
         automated_count = 0
 
         for i, record in enumerate(chain):
-            if record.operator == "llm":
-                llm_count += 1
+            if record.operator == "algorithm":
+                algorithm_count += 1
             elif record.operator == "human":
                 human_count += 1
             else:
@@ -230,7 +230,7 @@ class ProvenanceChain:
             intelligence_id=intelligence_id,
             is_valid=is_valid,
             chain_length=len(chain),
-            llm_contributions=llm_count,
+            algorithm_contributions=algorithm_count,
             human_contributions=human_count,
             automated_contributions=automated_count,
             tampered_steps=tampered_steps,
@@ -311,16 +311,16 @@ class ProvenanceChain:
 
         flagged_claims: List[Dict] = []
         unsupported_assertions: List[str] = []
-        total_llm_steps = 0
+        total_algorithm_steps = 0
         hallucinated_steps = 0
 
         for record in chain:
-            if record.operator != "llm":
+            if record.operator != "algorithm":
                 continue
 
-            total_llm_steps += 1
+            total_algorithm_steps += 1
 
-            if not record.llm_response:
+            if not record.algorithm_output:
                 continue
 
             input_data = record.metadata.get("input_data", {})
@@ -328,33 +328,38 @@ class ProvenanceChain:
             output_data = record.metadata.get("output_data", {})
             output_text = json.dumps(output_data, ensure_ascii=False, default=str)[:2000]
 
-            try:
-                claim_check = await self._llm_verify_claim(
-                    record.llm_response, input_text
-                )
-            except Exception as exc:
-                logger.warning(
-                    f"LLM hallucination check failed for record {record.id[:8]}: {exc}"
-                )
-                claim_check = self._heuristic_verify_claim(
-                    record.llm_response, input_text
-                )
+            claim_check = self._algorithmic_verify_claim(
+                record.algorithm_output, input_text
+            )
 
             if claim_check.get("is_hallucinated", False):
                 hallucinated_steps += 1
                 flagged_claims.append({
-                    "claim": record.llm_response[:300],
+                    "claim": record.algorithm_output[:300],
                     "evidence_for": claim_check.get("evidence_for", ""),
                     "evidence_against": claim_check.get("evidence_against", ""),
                     "verdict": "likely_hallucinated",
                     "stage": record.stage,
                     "record_id": record.id[:8],
                 })
-                unsupported_assertions.append(record.llm_response[:200])
+                unsupported_assertions.append(record.algorithm_output[:200])
+
+            if record.confidence_before is not None and record.confidence_after is not None:
+                delta = record.confidence_after - record.confidence_before
+                if delta > 0.3 and claim_check.get("overlap_ratio", 0) < 0.15:
+                    hallucinated_steps += 1
+                    flagged_claims.append({
+                        "claim": f"置信度异常跳升 {delta:.2f}，但输出与输入重叠率低",
+                        "evidence_for": f"输入输出重叠率: {claim_check.get('overlap_ratio', 0):.2f}",
+                        "evidence_against": f"置信度变化: {record.confidence_before:.2f} → {record.confidence_after:.2f}",
+                        "verdict": "suspicious_confidence_delta",
+                        "stage": record.stage,
+                        "record_id": record.id[:8],
+                    })
 
         hallucination_score = 0.0
-        if total_llm_steps > 0:
-            hallucination_score = hallucinated_steps / total_llm_steps
+        if total_algorithm_steps > 0:
+            hallucination_score = hallucinated_steps / total_algorithm_steps
 
         recommendation = self._generate_hallucination_recommendation(
             hallucination_score, len(flagged_claims)
@@ -368,49 +373,97 @@ class ProvenanceChain:
             recommendation=recommendation,
         )
 
-    async def _llm_verify_claim(self, claim: str, source_data: str) -> dict:
-        system_prompt = (
-            "你是一个AI幻觉检测专家。判断以下LLM生成的内容是否被源数据所支持。\n"
-            "输出JSON格式：\n"
-            '{"is_hallucinated":false,"evidence_for":"支持的证据",'
-            '"evidence_against":"反对的证据"}\n'
-            "is_hallucinated为true表示该内容可能是幻觉（不被源数据支持）。\n"
-            "只返回JSON，不要其他内容。"
-        )
-        prompt = (
-            f"源数据：\n{source_data[:1500]}\n\n"
-            f"LLM生成内容：\n{claim[:500]}\n\n"
-            "判断LLM生成内容是否被源数据支持。"
-        )
+    def _algorithmic_verify_claim(self, claim: str, source_data: str) -> dict:
+        claim_entities = self._extract_entities(claim)
+        source_entities = self._extract_entities(source_data)
 
-        result = await self.llm.generate_json(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=0.1,
-        )
-
-        return {
-            "is_hallucinated": bool(result.get("is_hallucinated", False)),
-            "evidence_for": result.get("evidence_for", ""),
-            "evidence_against": result.get("evidence_against", ""),
-        }
-
-    def _heuristic_verify_claim(self, claim: str, source_data: str) -> dict:
         claim_words = set(claim.split())
         source_words = set(source_data.split())
-        overlap = claim_words & source_words
+        word_overlap = claim_words & source_words
+        word_overlap_ratio = len(word_overlap) / len(claim_words) if claim_words else 0.0
 
-        if not claim_words:
-            return {"is_hallucinated": False, "evidence_for": "", "evidence_against": ""}
+        claim_bigrams = self._extract_ngrams(claim, 2)
+        source_bigrams = self._extract_ngrams(source_data, 2)
+        bigram_overlap = claim_bigrams & source_bigrams
+        bigram_overlap_ratio = len(bigram_overlap) / len(claim_bigrams) if claim_bigrams else 0.0
 
-        overlap_ratio = len(overlap) / len(claim_words)
-        is_hallucinated = overlap_ratio < 0.15
+        entity_match_count = 0
+        unmatched_entities = []
+        for entity in claim_entities:
+            if entity in source_entities:
+                entity_match_count += 1
+            else:
+                unmatched_entities.append(entity)
+
+        entity_match_ratio = entity_match_count / len(claim_entities) if claim_entities else 1.0
+
+        combined_score = (
+            word_overlap_ratio * 0.3
+            + bigram_overlap_ratio * 0.3
+            + entity_match_ratio * 0.4
+        )
+
+        is_hallucinated = combined_score < 0.2
+
+        evidence_for = ""
+        evidence_against = ""
+
+        if not is_hallucinated:
+            parts = []
+            if word_overlap_ratio > 0:
+                parts.append(f"词汇重叠率: {word_overlap_ratio:.2f}")
+            if bigram_overlap_ratio > 0:
+                parts.append(f"二元组重叠率: {bigram_overlap_ratio:.2f}")
+            if entity_match_ratio > 0:
+                parts.append(f"实体匹配率: {entity_match_ratio:.2f}")
+            evidence_for = "; ".join(parts)
+        else:
+            parts = []
+            if word_overlap_ratio < 0.15:
+                parts.append(f"词汇重叠率过低: {word_overlap_ratio:.2f}")
+            if bigram_overlap_ratio < 0.1:
+                parts.append(f"二元组重叠率过低: {bigram_overlap_ratio:.2f}")
+            if unmatched_entities:
+                parts.append(f"未匹配实体: {', '.join(unmatched_entities[:5])}")
+            evidence_against = "; ".join(parts)
 
         return {
             "is_hallucinated": is_hallucinated,
-            "evidence_for": f"词汇重叠率: {overlap_ratio:.2f}" if overlap_ratio >= 0.15 else "",
-            "evidence_against": f"词汇重叠率过低: {overlap_ratio:.2f}" if is_hallucinated else "",
+            "evidence_for": evidence_for,
+            "evidence_against": evidence_against,
+            "overlap_ratio": word_overlap_ratio,
+            "bigram_overlap_ratio": bigram_overlap_ratio,
+            "entity_match_ratio": entity_match_ratio,
         }
+
+    def _extract_entities(self, text: str) -> List[str]:
+        entities = []
+
+        ipv4_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
+        entities.extend(re.findall(ipv4_pattern, text))
+
+        hash_pattern = r'\b[a-fA-F0-9]{32,64}\b'
+        entities.extend(re.findall(hash_pattern, text))
+
+        url_pattern = r'https?://[^\s<>"\']+(?:\.[^\s<>"\']+)+'
+        entities.extend(re.findall(url_pattern, text))
+
+        cve_pattern = r'CVE-\d{4}-\d{4,}'
+        entities.extend(re.findall(cve_pattern, text))
+
+        domain_pattern = r'\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:com|net|org|io|cn|ru|tk|top|xyz|info|biz)\b'
+        entities.extend(re.findall(domain_pattern, text))
+
+        email_pattern = r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b'
+        entities.extend(re.findall(email_pattern, text))
+
+        return list(dict.fromkeys(entities))
+
+    def _extract_ngrams(self, text: str, n: int) -> set:
+        words = text.split()
+        if len(words) < n:
+            return set()
+        return {tuple(words[i:i + n]) for i in range(len(words) - n + 1)}
 
     def _generate_hallucination_recommendation(
         self, score: float, flagged_count: int

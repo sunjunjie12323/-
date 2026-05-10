@@ -8,8 +8,6 @@ from uuid import uuid4
 
 from loguru import logger
 
-from app.core.llm import LLMService
-
 
 class RealTimeCollector:
     URLHAUS_RECENT = "https://urlhaus-api.abuse.ch/v1/urls/recent/"
@@ -18,8 +16,7 @@ class RealTimeCollector:
     CACHE_DIR = "./cache/realtime"
     CACHE_TTL_SECONDS = 3600
 
-    def __init__(self, llm: LLMService):
-        self.llm = llm
+    def __init__(self):
         self.logger = logger.bind(collector="realtime")
         self._session: Optional[aiohttp.ClientSession] = None
 

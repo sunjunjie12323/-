@@ -16,11 +16,11 @@ class ProvenanceRecordRequest(BaseModel):
     stage: str = Field(..., min_length=1)
     input_data: Dict = Field(default_factory=dict)
     output_data: Dict = Field(default_factory=dict)
-    llm_prompt: Optional[str] = None
-    llm_response: Optional[str] = None
+    algorithm_input: Optional[str] = None
+    algorithm_output: Optional[str] = None
     confidence_before: Optional[float] = None
     confidence_after: Optional[float] = None
-    operator: str = Field(default="llm")
+    operator: str = Field(default="automated")
 
 
 def get_provenance_chain(request: Request) -> ProvenanceChain:
@@ -41,8 +41,8 @@ async def record_provenance(
                 stage=data.stage,
                 input_data=data.input_data,
                 output_data=data.output_data,
-                llm_prompt=data.llm_prompt,
-                llm_response=data.llm_response,
+                algorithm_input=data.algorithm_input,
+                algorithm_output=data.algorithm_output,
                 confidence_before=data.confidence_before,
                 confidence_after=data.confidence_after,
             ),

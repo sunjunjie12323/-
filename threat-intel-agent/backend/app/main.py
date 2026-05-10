@@ -128,7 +128,7 @@ async def _initialize_services(app: FastAPI):
     forum_collector = ForumCollector()
     wechat_collector = WeChatCollector()
     darkweb_collector = DarkWebCollector()
-    realtime_collector = RealTimeCollector(llm=llm)
+    realtime_collector = RealTimeCollector()
     commercial_collector = CommercialCollector()
 
     app.state.telegram_collector = telegram_collector
@@ -164,9 +164,9 @@ async def _initialize_services(app: FastAPI):
     app.state.attack_chain_predictor = attack_chain_predictor
     logger.info("AttackChainPredictor created (MITRE ATT&CK + Markov chain)")
 
-    provenance_chain = ProvenanceChain(llm=llm, vector_store=vector_store)
+    provenance_chain = ProvenanceChain(vector_store=vector_store)
     app.state.provenance_chain = provenance_chain
-    logger.info("ProvenanceChain created (SHA-256 cryptographic chain)")
+    logger.info("ProvenanceChain created (SHA-256 cryptographic chain + N-gram hallucination detection)")
 
     entity_attribution = EntityAttribution(vector_store=vector_store, knowledge_graph=knowledge_graph)
     app.state.entity_attribution = entity_attribution
@@ -176,9 +176,9 @@ async def _initialize_services(app: FastAPI):
     app.state.temporal_decay = temporal_decay
     logger.info("TemporalDecay created (MLE half-life estimation)")
 
-    intelligence_organism = IntelligenceOrganismEngine(llm=llm, vector_store=vector_store, knowledge_graph=knowledge_graph)
+    intelligence_organism = IntelligenceOrganismEngine(vector_store=vector_store, knowledge_graph=knowledge_graph)
     app.state.intelligence_organism = intelligence_organism
-    logger.info("IntelligenceOrganismEngine created")
+    logger.info("IntelligenceOrganismEngine created (TF-IDF cosine similarity validation)")
 
     logger.info("[13/17] Creating default admin user...")
     create_default_admin()
