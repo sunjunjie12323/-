@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
-    CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:5173"]'
+    CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:3001","http://localhost:3002","http://localhost:5173"]'
 
     SECRET_KEY: str = "change-me-in-production-use-a-strong-random-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24

@@ -23,7 +23,7 @@ import type {
 } from '../types';
 import { tokenStorage } from '../utils/tokenStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
