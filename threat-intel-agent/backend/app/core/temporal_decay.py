@@ -1,7 +1,7 @@
 import json
+import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -11,682 +11,324 @@ from scipy.optimize import minimize
 from app.core.vector_store import VectorStore
 
 
-DEFAULT_HALF_LIVES_HOURS = {
-    "ip": 72,
-    "phone": 168,
-    "bank_card": 336,
-    "domain": 720,
-    "url": 720,
-    "ttp": 2160,
-    "organization": 4320,
-    "blacktalk": 8760,
-    "policy": 17520,
-}
-
-TYPE_KEYWORDS = {
-    "ip": ["ip", "ip地址", "IP", "IP地址"],
-    "phone": ["手机", "电话", "手机号", "电话号码", "phone"],
-    "bank_card": ["银行卡", "卡号", "信用卡", "bank_card"],
-    "domain": ["域名", "domain", "网址", "网站"],
-    "url": ["url", "URL", "链接", "link"],
-    "ttp": ["攻击手法", "TTP", "技术", "战术", "手法", "漏洞", "exploit"],
-    "organization": ["组织", "团伙", "集团", "团队", "organization"],
-    "blacktalk": ["黑话", "暗语", "术语", "黑话术语", "blacktalk"],
-    "policy": ["法规", "政策", "法律", "条例", "policy"],
-}
-
-STATUS_THRESHOLDS = {
-    "fresh": 0.8,
-    "active": 0.5,
-    "stale": 0.2,
-}
-
-MLE_MIN_OBSERVATIONS = 3
-MLE_HALF_LIFE_BOUNDS = (1.0, 100000.0)
-
-
 @dataclass
-class DecayResult:
-    intelligence_id: str
-    intelligence_type: str
+class DecayItem:
+    id: str
+    content: str
+    source: str
     original_confidence: float
     current_confidence: float
     half_life_hours: float
     elapsed_hours: float
-    decay_percentage: float
-    is_expired: bool
-    status: str
+    threat_type: str
+    status: str = "active"
 
     def to_dict(self) -> dict:
         return {
-            "intelligence_id": self.intelligence_id,
-            "intelligence_type": self.intelligence_type,
-            "original_confidence": self.original_confidence,
-            "current_confidence": self.current_confidence,
-            "half_life_hours": self.half_life_hours,
-            "elapsed_hours": self.elapsed_hours,
-            "decay_percentage": self.decay_percentage,
-            "is_expired": self.is_expired,
+            "id": self.id,
+            "content": self.content[:100],
+            "source": self.source,
+            "original_confidence": round(self.original_confidence, 4),
+            "current_confidence": round(self.current_confidence, 4),
+            "half_life_hours": round(self.half_life_hours, 2),
+            "elapsed_hours": round(self.elapsed_hours, 2),
+            "threat_type": self.threat_type,
             "status": self.status,
         }
 
 
 @dataclass
-class DecayCurve:
-    intelligence_id: str
-    intelligence_type: str
-    half_life_hours: float
-    data_points: List[Dict] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "intelligence_id": self.intelligence_id,
-            "intelligence_type": self.intelligence_type,
-            "half_life_hours": self.half_life_hours,
-            "data_points": self.data_points,
-        }
-
-
-@dataclass
-class BatchDecayResult:
-    total: int
-    fresh_count: int
-    active_count: int
-    stale_count: int
-    expired_count: int
-    items: List[DecayResult] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "total": self.total,
-            "fresh_count": self.fresh_count,
-            "active_count": self.active_count,
-            "stale_count": self.stale_count,
-            "expired_count": self.expired_count,
-            "items": [item.to_dict() for item in self.items],
-        }
-
-
-@dataclass
 class DecayBatch:
-    items: List[DecayResult] = field(default_factory=list)
-    total: int = 0
-    fresh_count: int = 0
-    active_count: int = 0
-    stale_count: int = 0
-    expired_count: int = 0
+    items: List[DecayItem] = field(default_factory=list)
+    total_items: int = 0
+    expired_items: int = 0
+    critical_items: int = 0
+    average_confidence: float = 0.0
 
     def to_dict(self) -> dict:
         return {
-            "total": self.total,
-            "fresh_count": self.fresh_count,
-            "active_count": self.active_count,
-            "stale_count": self.stale_count,
-            "expired_count": self.expired_count,
-            "items": [item.to_dict() for item in self.items],
-        }
-
-
-@dataclass
-class RefreshRecommendation:
-    intelligence_id: str
-    content_preview: str
-    current_confidence: float
-    original_confidence: float
-    recommended_action: str
-    urgency: str
-    intelligence_type: str
-
-    def to_dict(self) -> dict:
-        return {
-            "intelligence_id": self.intelligence_id,
-            "content_preview": self.content_preview,
-            "current_confidence": self.current_confidence,
-            "original_confidence": self.original_confidence,
-            "recommended_action": self.recommended_action,
-            "urgency": self.urgency,
-            "intelligence_type": self.intelligence_type,
+            "items": [i.to_dict() for i in self.items],
+            "total_items": self.total_items,
+            "expired_items": self.expired_items,
+            "critical_items": self.critical_items,
+            "average_confidence": round(self.average_confidence, 4),
         }
 
 
 @dataclass
 class DecayRecommendation:
-    intelligence_id: str
-    content_preview: str
-    current_confidence: float
-    original_confidence: float
-    recommended_action: str
-    urgency: str
-    intelligence_type: str
+    item_id: str
+    action: str
+    reason: str
+    urgency: str = "low"
 
     def to_dict(self) -> dict:
         return {
-            "intelligence_id": self.intelligence_id,
-            "content_preview": self.content_preview,
-            "current_confidence": self.current_confidence,
-            "original_confidence": self.original_confidence,
-            "recommended_action": self.recommended_action,
+            "item_id": self.item_id,
+            "action": self.action,
+            "reason": self.reason,
             "urgency": self.urgency,
-            "intelligence_type": self.intelligence_type,
         }
+
+
+DEFAULT_HALF_LIVES = {
+    "malware": 24.0,
+    "phishing": 48.0,
+    "vulnerability": 720.0,
+    "botnet": 168.0,
+    "c2": 336.0,
+    "data_breach": 720.0,
+    "fraud": 168.0,
+    "ransomware": 72.0,
+    "apt": 2160.0,
+    "spam": 12.0,
+    "ddos": 6.0,
+    "default": 168.0,
+}
+
+THREAT_TYPE_KEYWORDS = {
+    "malware": ["malware", "木马", "恶意软件", "病毒", "蠕虫", "rat", "trojan"],
+    "phishing": ["phishing", "钓鱼", "仿冒", "phish"],
+    "vulnerability": ["vulnerability", "漏洞", "cve", "0day", "zero-day", "exploit"],
+    "botnet": ["botnet", "僵尸网络", "肉鸡"],
+    "c2": ["c2", "command and control", "控制服务器"],
+    "data_breach": ["breach", "泄露", "脱库", "data leak"],
+    "fraud": ["fraud", "诈骗", "杀猪盘", "套路贷", "fraud"],
+    "ransomware": ["ransomware", "勒索", "加密"],
+    "apt": ["apt", "advanced persistent", "高级持续威胁"],
+    "spam": ["spam", "垃圾邮件"],
+    "ddos": ["ddos", "拒绝服务"],
+}
 
 
 class TemporalDecay:
-    DEFAULT_HALF_LIFE = 720
-    EXPIRED_THRESHOLD = 0.2
-    CURVE_POINTS = 20
-    MODEL_PERSIST_DIR = Path("./model_data/temporal_decay")
+    MIN_OBSERVATIONS_FOR_MLE = 3
 
     def __init__(self, vector_store: VectorStore):
         self.vector_store = vector_store
-        self._intelligence_registry: Dict[str, Dict] = {}
-        self._observations: Dict[str, List[Dict]] = {}
-        self._learned_half_lives: Dict[str, float] = {}
-        self._half_lives: Dict[str, float] = dict(DEFAULT_HALF_LIVES_HOURS)
-
+        self._half_lives: Dict[str, float] = dict(DEFAULT_HALF_LIVES)
+        self._observations: Dict[str, List[Tuple[float, float]]] = {}
+        self._persist_dir = "./model_data/temporal_decay"
+        os.makedirs(self._persist_dir, exist_ok=True)
         self._load_learned_half_lives()
 
     def _load_learned_half_lives(self):
-        if not self.MODEL_PERSIST_DIR.exists():
-            return
-        try:
-            data_file = self.MODEL_PERSIST_DIR / "learned_half_lives.json"
-            if not data_file.exists():
-                return
-            with open(data_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self._learned_half_lives = {
-                k: float(v) for k, v in data.get("half_lives", {}).items()
-            }
-            self._observations = data.get("observations", {})
-            for itype, hl in self._learned_half_lives.items():
-                self._half_lives[itype] = hl
-            logger.info(
-                f"Loaded {len(self._learned_half_lives)} learned half-lives from disk"
-            )
-        except Exception as exc:
-            logger.warning(f"Failed to load learned half-lives: {exc}")
+        path = os.path.join(self._persist_dir, "learned_half_lives.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                self._half_lives.update(data.get("half_lives", {}))
+                self._observations = {}
+                for threat_type, obs_list in data.get("observations", {}).items():
+                    self._observations[threat_type] = [(o[0], o[1]) for o in obs_list]
+                logger.info(f"Loaded learned half-lives: {len(data.get('half_lives', {}))} types updated")
+            except Exception as exc:
+                logger.warning(f"Failed to load learned half-lives: {exc}")
 
     def _save_learned_half_lives(self):
-        try:
-            self.MODEL_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
-            data = {
-                "half_lives": self._learned_half_lives,
-                "observations": self._observations,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-            data_file = self.MODEL_PERSIST_DIR / "learned_half_lives.json"
-            with open(data_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            logger.info(
-                f"Saved {len(self._learned_half_lives)} learned half-lives to disk"
-            )
-        except Exception as exc:
-            logger.warning(f"Failed to save learned half-lives: {exc}")
-
-    def register_intelligence(
-        self,
-        intelligence_id: str,
-        intelligence_type: str,
-        original_confidence: float,
-        timestamp: str,
-        content: str = "",
-    ):
-        self._intelligence_registry[intelligence_id] = {
-            "type": intelligence_type,
-            "original_confidence": original_confidence,
-            "timestamp": timestamp,
-            "content": content,
+        path = os.path.join(self._persist_dir, "learned_half_lives.json")
+        obs_serializable = {}
+        for t, obs in self._observations.items():
+            obs_serializable[t] = [[o[0], o[1]] for o in obs]
+        data = {
+            "half_lives": self._half_lives,
+            "observations": obs_serializable,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
         }
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Saved learned half-lives")
 
-    def record_observation(
-        self,
-        intelligence_id: str,
-        intelligence_type: str,
-        observed_confidence: float,
-        observed_at: str,
-        original_confidence: float,
-        original_timestamp: str,
-    ):
-        if intelligence_type not in self._observations:
-            self._observations[intelligence_type] = []
+    def _classify_threat_type(self, content: str, source: str) -> str:
+        text = (content + " " + source).lower()
+        best_type = "default"
+        best_score = 0
+        for threat_type, keywords in THREAT_TYPE_KEYWORDS.items():
+            score = sum(1 for kw in keywords if kw in text)
+            if score > best_score:
+                best_score = score
+                best_type = threat_type
+        return best_type
 
-        self._observations[intelligence_type].append(
-            {
-                "intelligence_id": intelligence_id,
-                "original_confidence": original_confidence,
-                "observed_confidence": observed_confidence,
-                "original_timestamp": original_timestamp,
-                "observed_at": observed_at,
-            }
-        )
+    def _decay(self, original_confidence: float, elapsed_hours: float, half_life: float) -> float:
+        if half_life <= 0:
+            return original_confidence
+        return original_confidence * float(np.power(0.5, elapsed_hours / half_life))
 
-        obs_count = len(self._observations[intelligence_type])
-        if obs_count >= MLE_MIN_OBSERVATIONS:
-            self._estimate_half_life_mle(intelligence_type)
+    def record_observation(self, threat_type: str, elapsed_hours: float, observed_confidence: float):
+        if threat_type not in self._observations:
+            self._observations[threat_type] = []
+        self._observations[threat_type].append((elapsed_hours, observed_confidence))
 
-    def _estimate_half_life_mle(self, intelligence_type: str):
-        observations = self._observations.get(intelligence_type, [])
-        if len(observations) < MLE_MIN_OBSERVATIONS:
-            return
+        if len(self._observations[threat_type]) >= self.MIN_OBSERVATIONS_FOR_MLE:
+            estimated = self._estimate_half_life_mle(threat_type)
+            if estimated is not None and estimated > 0:
+                old_hl = self._half_lives.get(threat_type, DEFAULT_HALF_LIVES.get("default", 168.0))
+                self._half_lives[threat_type] = 0.7 * estimated + 0.3 * old_hl
+                logger.info(f"MLE updated half-life for {threat_type}: {old_hl:.1f}h -> {self._half_lives[threat_type]:.1f}h")
+                self._save_learned_half_lives()
 
-        prior = DEFAULT_HALF_LIVES_HOURS.get(
-            intelligence_type, self.DEFAULT_HALF_LIFE
-        )
+    def _estimate_half_life_mle(self, threat_type: str) -> Optional[float]:
+        obs = self._observations.get(threat_type, [])
+        if len(obs) < self.MIN_OBSERVATIONS_FOR_MLE:
+            return None
+
+        initial_hl = self._half_lives.get(threat_type, DEFAULT_HALF_LIVES.get("default", 168.0))
+        initial_conf = obs[0][1] if obs[0][1] > 0 else 0.8
+
+        def neg_log_likelihood(log_hl):
+            hl = np.exp(log_hl)
+            if hl <= 0:
+                return 1e10
+            residuals = []
+            for elapsed, observed in obs:
+                predicted = initial_conf * np.power(0.5, elapsed / hl)
+                residuals.append(observed - predicted)
+            residuals = np.array(residuals)
+            n = len(residuals)
+            sigma = np.std(residuals) if n > 1 else 0.1
+            sigma = max(sigma, 1e-6)
+            nll = 0.5 * np.sum((residuals / sigma) ** 2) + n * np.log(sigma)
+            return nll
 
         try:
-            elapsed_hours_list = []
-            confidence_ratios = []
-            for obs in observations:
-                orig_ts = self._parse_timestamp(obs["original_timestamp"])
-                obs_ts = self._parse_timestamp(obs["observed_at"])
-                elapsed = (obs_ts - orig_ts).total_seconds() / 3600.0
-                if elapsed <= 0:
-                    continue
-                orig_conf = max(float(obs["original_confidence"]), 0.001)
-                ratio = float(obs["observed_confidence"]) / orig_conf
-                ratio = np.clip(ratio, 1e-6, 1.0)
-                elapsed_hours_list.append(elapsed)
-                confidence_ratios.append(ratio)
-
-            if len(elapsed_hours_list) < MLE_MIN_OBSERVATIONS:
-                return
-
-            elapsed_arr = np.array(elapsed_hours_list, dtype=np.float64)
-            ratio_arr = np.array(confidence_ratios, dtype=np.float64)
-
-            def neg_log_likelihood(log_hl: np.ndarray) -> float:
-                hl = np.exp(log_hl[0])
-                predicted = np.power(0.5, elapsed_arr / hl)
-                residuals = ratio_arr - predicted
-                sigma = np.std(residuals) + 1e-8
-                nll = 0.5 * np.sum((residuals / sigma) ** 2) + len(
-                    residuals
-                ) * np.log(sigma + 1e-8)
-                return float(nll)
-
-            x0 = np.array([np.log(prior)])
-            bounds = [
-                (
-                    np.log(MLE_HALF_LIFE_BOUNDS[0]),
-                    np.log(MLE_HALF_LIFE_BOUNDS[1]),
-                )
-            ]
-
             result = minimize(
                 neg_log_likelihood,
-                x0,
+                x0=np.log(initial_hl),
                 method="L-BFGS-B",
-                bounds=bounds,
+                bounds=[(np.log(1.0), np.log(87600.0))],
             )
-
             if result.success:
-                estimated_hl = float(np.exp(result.x[0]))
-                self._learned_half_lives[intelligence_type] = estimated_hl
-                self._half_lives[intelligence_type] = estimated_hl
-                logger.info(
-                    f"MLE estimated half-life for '{intelligence_type}': "
-                    f"{estimated_hl:.1f} hours (prior: {prior} hours, "
-                    f"observations: {len(elapsed_hours_list)})"
-                )
-                self._save_learned_half_lives()
-            else:
-                logger.warning(
-                    f"MLE optimization failed for '{intelligence_type}': "
-                    f"{result.message}, keeping prior"
-                )
+                return float(np.exp(result.x[0]))
         except Exception as exc:
-            logger.warning(
-                f"MLE half-life estimation failed for '{intelligence_type}': {exc}"
-            )
-
-    def _classify_type(self, content: str, metadata: Dict = None) -> str:
-        if metadata:
-            entity_type = metadata.get("entity_type", metadata.get("type", ""))
-            if entity_type:
-                type_lower = entity_type.lower()
-                for known_type in DEFAULT_HALF_LIVES_HOURS:
-                    if known_type in type_lower:
-                        return known_type
-
-        if content:
-            content_lower = content.lower()
-            best_type = "ttp"
-            best_score = 0
-            for itype, keywords in TYPE_KEYWORDS.items():
-                score = sum(1 for kw in keywords if kw in content_lower)
-                if score > best_score:
-                    best_score = score
-                    best_type = itype
-            if best_score > 0:
-                return best_type
-
-        return "ttp"
-
-    def _get_half_life(self, intelligence_type: str) -> float:
-        return self._half_lives.get(intelligence_type, self.DEFAULT_HALF_LIFE)
-
-    def _compute_decay(
-        self,
-        original_confidence: float,
-        elapsed_hours: float,
-        half_life_hours: float,
-    ) -> float:
-        if elapsed_hours <= 0:
-            return original_confidence
-        return float(
-            original_confidence * np.power(0.5, elapsed_hours / half_life_hours)
-        )
-
-    def _get_status(self, current_confidence: float) -> str:
-        if current_confidence >= STATUS_THRESHOLDS["fresh"]:
-            return "fresh"
-        if current_confidence >= STATUS_THRESHOLDS["active"]:
-            return "active"
-        if current_confidence >= STATUS_THRESHOLDS["stale"]:
-            return "stale"
-        return "expired"
-
-    def _parse_timestamp(self, timestamp) -> datetime:
-        if isinstance(timestamp, datetime):
-            return timestamp
-        try:
-            return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        except (ValueError, TypeError, AttributeError):
-            try:
-                return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-            except (ValueError, TypeError):
-                return datetime.now(timezone.utc)
-
-    async def _lookup_intelligence(self, intelligence_id: str) -> Optional[Dict]:
-        try:
-            results = await self.vector_store.search_intelligence(
-                intelligence_id, n_results=5
-            )
-            for result in results:
-                if result.get("id") == intelligence_id:
-                    metadata = result.get("metadata", {})
-                    return {
-                        "type": metadata.get(
-                            "entity_type", metadata.get("type", "unknown")
-                        ),
-                        "original_confidence": metadata.get("confidence", 0.5),
-                        "timestamp": metadata.get(
-                            "collected_at", metadata.get("timestamp", "")
-                        ),
-                        "content": result.get("document", ""),
-                        "metadata": metadata,
-                    }
-        except Exception as exc:
-            logger.warning(
-                f"Intelligence lookup failed for '{intelligence_id}': {exc}"
-            )
+            logger.warning(f"MLE estimation failed for {threat_type}: {exc}")
 
         return None
 
-    async def compute_current_confidence(
-        self, intelligence_id: str
-    ) -> DecayResult:
-        info = self._intelligence_registry.get(intelligence_id)
-
-        if not info:
-            info = await self._lookup_intelligence(intelligence_id)
-            if not info:
-                return DecayResult(
-                    intelligence_id=intelligence_id,
-                    intelligence_type="unknown",
-                    original_confidence=0.0,
-                    current_confidence=0.0,
-                    half_life_hours=0.0,
-                    elapsed_hours=0.0,
-                    decay_percentage=100.0,
-                    is_expired=True,
-                    status="expired",
-                )
-
-        intelligence_type = info.get("type", "")
-        if not intelligence_type or intelligence_type == "unknown":
-            intelligence_type = self._classify_type(
-                info.get("content", ""), info.get("metadata")
-            )
-
-        original_confidence = float(info.get("original_confidence", 0.5))
-        timestamp = info.get("timestamp", "")
-        created_at = self._parse_timestamp(timestamp)
+    async def batch_decay(self) -> DecayBatch:
+        items: List[DecayItem] = []
         now = datetime.now(timezone.utc)
 
-        elapsed = now - created_at
-        elapsed_hours = max(elapsed.total_seconds() / 3600, 0)
+        try:
+            results = await self.vector_store.search_intelligence("", n_results=100)
+        except Exception:
+            results = []
 
-        half_life = self._get_half_life(intelligence_type)
-        current_confidence = self._compute_decay(
-            original_confidence, elapsed_hours, half_life
-        )
+        for result in results:
+            doc = result.get("document", "")
+            metadata = result.get("metadata", {})
+            if not doc:
+                continue
 
-        decay_percentage = 0.0
-        if original_confidence > 0:
-            decay_percentage = (
-                (1.0 - current_confidence / original_confidence) * 100
-            )
+            item_id = result.get("id", "")
+            source = metadata.get("source", "unknown")
+            collected_at_str = metadata.get("collected_at", metadata.get("timestamp", ""))
+            original_conf = float(metadata.get("confidence", 0.8))
 
-        is_expired = current_confidence < self.EXPIRED_THRESHOLD * original_confidence
-        status = self._get_status(
-            current_confidence / max(original_confidence, 0.001)
-        )
+            elapsed_hours = 0.0
+            if collected_at_str:
+                try:
+                    if collected_at_str.endswith("Z"):
+                        collected_at_str = collected_at_str[:-1] + "+00:00"
+                    collected_at = datetime.fromisoformat(collected_at_str)
+                    if collected_at.tzinfo is None:
+                        collected_at = collected_at.replace(tzinfo=timezone.utc)
+                    elapsed = now - collected_at
+                    elapsed_hours = elapsed.total_seconds() / 3600
+                except Exception:
+                    elapsed_hours = 0.0
 
-        return DecayResult(
-            intelligence_id=intelligence_id,
-            intelligence_type=intelligence_type,
-            original_confidence=original_confidence,
-            current_confidence=round(current_confidence, 6),
-            half_life_hours=half_life,
-            elapsed_hours=round(elapsed_hours, 2),
-            decay_percentage=round(decay_percentage, 2),
-            is_expired=is_expired,
-            status=status,
-        )
+            threat_type = self._classify_threat_type(doc, source)
+            half_life = self._half_lives.get(threat_type, self._half_lives["default"])
+            current_conf = self._decay(original_conf, elapsed_hours, half_life)
 
-    async def compute_decay_curve(self, intelligence_id: str) -> DecayCurve:
-        info = self._intelligence_registry.get(intelligence_id)
-        if not info:
-            info = await self._lookup_intelligence(intelligence_id)
+            status = "active"
+            if current_conf < 0.1:
+                status = "expired"
+            elif current_conf < 0.3:
+                status = "critical"
 
-        if not info:
-            return DecayCurve(
-                intelligence_id=intelligence_id,
-                intelligence_type="unknown",
-                half_life_hours=0,
-            )
+            items.append(DecayItem(
+                id=item_id,
+                content=doc,
+                source=source,
+                original_confidence=original_conf,
+                current_confidence=current_conf,
+                half_life_hours=half_life,
+                elapsed_hours=elapsed_hours,
+                threat_type=threat_type,
+                status=status,
+            ))
 
-        intelligence_type = info.get("type", "")
-        if not intelligence_type or intelligence_type == "unknown":
-            intelligence_type = self._classify_type(
-                info.get("content", ""), info.get("metadata")
-            )
+        expired = sum(1 for i in items if i.status == "expired")
+        critical = sum(1 for i in items if i.status == "critical")
+        avg_conf = float(np.mean([i.current_confidence for i in items])) if items else 0.0
 
-        original_confidence = float(info.get("original_confidence", 0.5))
-        half_life = self._get_half_life(intelligence_type)
-
-        total_hours = half_life * 5
-        step = total_hours / self.CURVE_POINTS
-
-        data_points: List[Dict] = []
-        for i in range(self.CURVE_POINTS + 1):
-            hours = i * step
-            confidence = self._compute_decay(
-                original_confidence, hours, half_life
-            )
-            ratio = confidence / max(original_confidence, 0.001)
-
-            label = ""
-            if i == 0:
-                label = "初始"
-            elif hours <= half_life * 0.5:
-                label = "新鲜"
-            elif hours <= half_life:
-                label = "半衰期"
-            elif hours <= half_life * 2:
-                label = "衰减中"
-            elif hours <= half_life * 3:
-                label = "陈旧"
-            else:
-                label = "过期"
-
-            data_points.append(
-                {
-                    "hours": round(hours, 1),
-                    "confidence": round(confidence, 6),
-                    "label": label,
-                }
-            )
-
-        return DecayCurve(
-            intelligence_id=intelligence_id,
-            intelligence_type=intelligence_type,
-            half_life_hours=half_life,
-            data_points=data_points,
-        )
-
-    async def batch_decay(self) -> BatchDecayResult:
-        all_ids = list(self._intelligence_registry.keys())
-
-        if not all_ids:
-            try:
-                col = self.vector_store._collections.get("intelligence")
-                if col:
-                    all_ids = list(col.get(include=[])["ids"])
-            except Exception:
-                pass
-
-        items: List[DecayResult] = []
-        fresh_count = 0
-        active_count = 0
-        stale_count = 0
-        expired_count = 0
-
-        for intel_id in all_ids:
-            try:
-                result = await self.compute_current_confidence(intel_id)
-                items.append(result)
-
-                if result.status == "fresh":
-                    fresh_count += 1
-                elif result.status == "active":
-                    active_count += 1
-                elif result.status == "stale":
-                    stale_count += 1
-                else:
-                    expired_count += 1
-            except Exception as exc:
-                logger.warning(
-                    f"Batch decay analysis failed for '{intel_id}': {exc}"
-                )
-                expired_count += 1
-
-        return BatchDecayResult(
-            total=len(all_ids),
-            fresh_count=fresh_count,
-            active_count=active_count,
-            stale_count=stale_count,
-            expired_count=expired_count,
+        return DecayBatch(
             items=items,
+            total_items=len(items),
+            expired_items=expired,
+            critical_items=critical,
+            average_confidence=avg_conf,
         )
-
-    async def batch_decay_analysis(self) -> BatchDecayResult:
-        return await self.batch_decay()
 
     async def recommendations(self) -> List[DecayRecommendation]:
-        all_ids = list(self._intelligence_registry.keys())
-
-        if not all_ids:
-            try:
-                col = self.vector_store._collections.get("intelligence")
-                if col:
-                    all_ids = list(col.get(include=[])["ids"])
-            except Exception:
-                pass
-
+        batch = await self.batch_decay()
         recs: List[DecayRecommendation] = []
 
-        for intel_id in all_ids:
-            try:
-                decay = await self.compute_current_confidence(intel_id)
-            except Exception as exc:
-                logger.warning(
-                    f"Decay computation failed for '{intel_id}': {exc}"
-                )
-                continue
+        for item in batch.items:
+            if item.status == "expired":
+                recs.append(DecayRecommendation(
+                    item_id=item.id,
+                    action="归档或删除",
+                    reason=f"置信度已衰减至{item.current_confidence:.2f}（半衰期{item.half_life_hours:.0f}h，已过{item.elapsed_hours:.0f}h）",
+                    urgency="low",
+                ))
+            elif item.status == "critical":
+                recs.append(DecayRecommendation(
+                    item_id=item.id,
+                    action="重新验证或更新",
+                    reason=f"置信度降至{item.current_confidence:.2f}，即将过期",
+                    urgency="high",
+                ))
+            elif item.current_confidence < 0.5:
+                recs.append(DecayRecommendation(
+                    item_id=item.id,
+                    action="考虑更新来源",
+                    reason=f"置信度{item.current_confidence:.2f}，建议补充新情报",
+                    urgency="medium",
+                ))
 
-            if decay.status in ("fresh", "active"):
-                continue
-
-            info = self._intelligence_registry.get(intel_id, {})
-            content_preview = info.get("content", "")[:100]
-
-            urgency, action = self._determine_refresh_action(decay)
-
-            recs.append(
-                DecayRecommendation(
-                    intelligence_id=intel_id,
-                    content_preview=content_preview,
-                    current_confidence=decay.current_confidence,
-                    original_confidence=decay.original_confidence,
-                    recommended_action=action,
-                    urgency=urgency,
-                    intelligence_type=decay.intelligence_type,
-                )
-            )
-
-        recs.sort(
-            key=lambda r: {"immediate": 0, "soon": 1, "routine": 2}.get(
-                r.urgency, 2
-            )
-        )
+        recs.sort(key=lambda r: {"high": 0, "medium": 1, "low": 2}.get(r.urgency, 2))
         return recs
 
-    async def recommend_refresh(self) -> List[RefreshRecommendation]:
-        decay_recs = await self.recommendations()
+    async def batch_decay_analysis(self) -> Dict:
+        batch = await self.batch_decay()
+        recs = await self.recommendations()
+        return {
+            "batch": batch.to_dict(),
+            "recommendations": [r.to_dict() for r in recs],
+            "half_lives": {k: round(v, 2) for k, v in self._half_lives.items()},
+        }
+
+    async def recommend_refresh(self, threshold: float = 0.3) -> List[Dict]:
+        batch = await self.batch_decay()
         return [
-            RefreshRecommendation(
-                intelligence_id=r.intelligence_id,
-                content_preview=r.content_preview,
-                current_confidence=r.current_confidence,
-                original_confidence=r.original_confidence,
-                recommended_action=r.recommended_action,
-                urgency=r.urgency,
-                intelligence_type=r.intelligence_type,
-            )
-            for r in decay_recs
+            {"id": i.id, "confidence": round(i.current_confidence, 4), "threat_type": i.threat_type}
+            for i in batch.items
+            if i.current_confidence < threshold
         ]
 
-    def _determine_refresh_action(self, decay: DecayResult) -> Tuple[str, str]:
-        if decay.status == "expired":
-            if decay.current_confidence < 0.05:
-                return (
-                    "immediate",
-                    "情报已严重过期，建议立即重新采集或标记为无效",
-                )
-            return "soon", "情报已过期，建议尽快重新验证或更新"
-
-        if decay.status == "stale":
-            if decay.current_confidence < 0.3:
-                return "soon", "情报即将过期，建议在近期重新验证"
-            return "routine", "情报正在衰减，建议定期检查更新"
-
-        return "routine", "建议定期复查"
-
     def get_half_lives_info(self) -> Dict:
-        result = {}
-        for itype, default_hl in DEFAULT_HALF_LIVES_HOURS.items():
-            learned = self._learned_half_lives.get(itype)
-            obs_count = len(self._observations.get(itype, []))
-            result[itype] = {
-                "default_half_life": default_hl,
-                "learned_half_life": learned,
-                "active_half_life": self._half_lives.get(
-                    itype, self.DEFAULT_HALF_LIFE
-                ),
+        info = {}
+        for threat_type, default_hl in DEFAULT_HALF_LIVES.items():
+            current_hl = self._half_lives.get(threat_type, default_hl)
+            obs_count = len(self._observations.get(threat_type, []))
+            info[threat_type] = {
+                "default_half_life_hours": default_hl,
+                "current_half_life_hours": round(current_hl, 2),
+                "learned": current_hl != default_hl,
                 "observation_count": obs_count,
-                "mle_estimated": learned is not None,
             }
-        return result
+        return info

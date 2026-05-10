@@ -122,19 +122,22 @@ async def _initialize_services(app: FastAPI):
     from app.collectors.wechat_collector import WeChatCollector
     from app.collectors.darkweb_collector import DarkWebCollector
     from app.collectors.realtime_collector import RealTimeCollector
+    from app.collectors.commercial_collector import CommercialCollector
 
     telegram_collector = TelegramCollector()
     forum_collector = ForumCollector()
     wechat_collector = WeChatCollector()
     darkweb_collector = DarkWebCollector()
     realtime_collector = RealTimeCollector(llm=llm)
+    commercial_collector = CommercialCollector()
 
     app.state.telegram_collector = telegram_collector
     app.state.forum_collector = forum_collector
     app.state.wechat_collector = wechat_collector
     app.state.darkweb_collector = darkweb_collector
     app.state.realtime_collector = realtime_collector
-    logger.info("All collectors created")
+    app.state.commercial_collector = commercial_collector
+    logger.info("All collectors created (including commercial sources)")
 
     logger.info("[10/17] Registering collectors with CollectorAgent...")
     orchestrator.collector.register_collector("telegram", telegram_collector.collect)
@@ -142,6 +145,7 @@ async def _initialize_services(app: FastAPI):
     orchestrator.collector.register_collector("wechat", wechat_collector.collect)
     orchestrator.collector.register_collector("darkweb", darkweb_collector.collect)
     orchestrator.collector.register_collector("realtime", realtime_collector.collect)
+    orchestrator.collector.register_collector("commercial", commercial_collector.collect)
     logger.info("All collectors registered")
 
     logger.info("[11/17] Registering task queue handlers and starting workers...")
@@ -150,27 +154,27 @@ async def _initialize_services(app: FastAPI):
     await task_queue.start()
     logger.info(f"Task queue started with {settings.MAX_CONCURRENT_TASKS} workers")
 
-    logger.info("[12/17] Creating innovation engines...")
+    logger.info("[12/17] Creating innovation engines (real ML algorithms, no LLM)...")
 
-    zero_day_detector = ZeroDayDetector(llm=llm, vector_store=vector_store, blacktalk_engine=blacktalk_engine)
+    zero_day_detector = ZeroDayDetector(vector_store=vector_store, blacktalk_engine=blacktalk_engine)
     app.state.zero_day_detector = zero_day_detector
-    logger.info("ZeroDayDetector created")
+    logger.info("ZeroDayDetector created (Skip-gram + KL divergence)")
 
-    attack_chain_predictor = AttackChainPredictor(llm=llm, knowledge_graph=knowledge_graph, vector_store=vector_store)
+    attack_chain_predictor = AttackChainPredictor(vector_store=vector_store, knowledge_graph=knowledge_graph)
     app.state.attack_chain_predictor = attack_chain_predictor
-    logger.info("AttackChainPredictor created")
+    logger.info("AttackChainPredictor created (MITRE ATT&CK + Markov chain)")
 
     provenance_chain = ProvenanceChain(llm=llm, vector_store=vector_store)
     app.state.provenance_chain = provenance_chain
-    logger.info("ProvenanceChain created")
+    logger.info("ProvenanceChain created (SHA-256 cryptographic chain)")
 
-    entity_attribution = EntityAttribution(llm=llm, knowledge_graph=knowledge_graph, vector_store=vector_store)
+    entity_attribution = EntityAttribution(vector_store=vector_store, knowledge_graph=knowledge_graph)
     app.state.entity_attribution = entity_attribution
-    logger.info("EntityAttribution created")
+    logger.info("EntityAttribution created (TransE knowledge graph embedding)")
 
-    temporal_decay = TemporalDecay(llm=llm, vector_store=vector_store, knowledge_graph=knowledge_graph)
+    temporal_decay = TemporalDecay(vector_store=vector_store)
     app.state.temporal_decay = temporal_decay
-    logger.info("TemporalDecay created")
+    logger.info("TemporalDecay created (MLE half-life estimation)")
 
     intelligence_organism = IntelligenceOrganismEngine(llm=llm, vector_store=vector_store, knowledge_graph=knowledge_graph)
     app.state.intelligence_organism = intelligence_organism
@@ -199,7 +203,7 @@ async def _shutdown_services(app: FastAPI):
         except Exception as exc:
             logger.warning(f"Failed to close RealTimeCollector: {exc}")
 
-    for name in ("telegram_collector", "forum_collector", "wechat_collector", "darkweb_collector"):
+    for name in ("telegram_collector", "forum_collector", "wechat_collector", "darkweb_collector", "commercial_collector"):
         collector = getattr(app.state, name, None)
         if collector and hasattr(collector, "close"):
             try:
