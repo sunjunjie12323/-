@@ -68,7 +68,7 @@ async def batch_decay_analysis(
             decay.batch_decay_analysis(),
             timeout=60,
         )
-        return result.to_dict()
+        return result
     except asyncio.TimeoutError:
         logger.error("Batch decay analysis timed out")
         raise HTTPException(status_code=504, detail="Batch decay analysis timed out")
@@ -89,7 +89,7 @@ async def get_refresh_recommendations(
             timeout=60,
         )
         return {
-            "recommendations": [r.to_dict() for r in recommendations],
+            "recommendations": recommendations if isinstance(recommendations, list) and (not recommendations or isinstance(recommendations[0], dict)) else [r.to_dict() if hasattr(r, 'to_dict') else r for r in recommendations],
             "total": len(recommendations),
         }
     except asyncio.TimeoutError:

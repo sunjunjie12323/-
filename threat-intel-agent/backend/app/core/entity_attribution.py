@@ -85,7 +85,8 @@ class TransEModel:
         for h, r, t in positive_triples:
             pos_score = self.score(h, r, t)
             for _ in range(n_neg):
-                if np.random.random() < 0.5:
+                corrupt_head = np.random.random() < 0.5
+                if corrupt_head:
                     neg_h = np.random.randint(self.n_entities)
                     neg_score = self.score(neg_h, r, t)
                 else:
@@ -97,7 +98,7 @@ class TransEModel:
 
                 if loss > 0:
                     grad_pos = self._grad(h, r, t)
-                    if np.random.random() < 0.5:
+                    if corrupt_head:
                         grad_neg = self._grad(neg_h, r, t)
                         self.entity_embeddings[h] -= lr * grad_pos
                         self.entity_embeddings[neg_h] += lr * grad_neg
@@ -105,7 +106,7 @@ class TransEModel:
                         grad_neg = self._grad(h, r, neg_t)
                         self.entity_embeddings[h] -= lr * grad_pos
                         self.entity_embeddings[neg_t] += lr * grad_neg
-                    self.relation_embeddings[r] -= lr * (grad_pos - grad_neg if np.random.random() < 0.5 else grad_pos)
+                    self.relation_embeddings[r] -= lr * grad_pos
 
             self._normalize()
         return total_loss / max(len(positive_triples), 1)

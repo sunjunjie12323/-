@@ -224,7 +224,11 @@ class TemporalDecay:
             item_id = result.get("id", "")
             source = metadata.get("source", "unknown")
             collected_at_str = metadata.get("collected_at", metadata.get("timestamp", ""))
-            original_conf = float(metadata.get("confidence", 0.8))
+            raw_conf = metadata.get("confidence", 0.8)
+            try:
+                original_conf = float(raw_conf)
+            except (ValueError, TypeError):
+                original_conf = 0.8
 
             elapsed_hours = 0.0
             if collected_at_str:
@@ -332,3 +336,103 @@ class TemporalDecay:
                 "observation_count": obs_count,
             }
         return info
+
+    async def compute_current_confidence(self, intelligence_id: str) -> DecayItem:
+        now = datetime.now(timezone.utc)
+        try:
+            results = await self.vector_store.search_intelligence("", n_results=1000)
+        except Exception:
+            results = []
+
+        for result in results:
+            if result.get("id", "") == intelligence_id:
+                doc = result.get("document", "")
+                metadata = result.get("metadata", {})
+                source = metadata.get("source", "unknown")
+                collected_at_str = metadata.get("collected_at", metadata.get("timestamp", ""))
+
+                raw_conf = metadata.get("confidence", 0.8)
+                try:
+                    original_conf = float(raw_conf)
+                except (ValueError, TypeError):
+                    original_conf = 0.8
+
+                elapsed_hours = 0.0
+                if collected_at_str:
+                    try:
+                        if collected_at_str.endswith("Z"):
+                            collected_at_str = collected_at_str[:-1] + "+00:00"
+                        collected_at = datetime.fromisoformat(collected_at_str)
+                        if collected_at.tzinfo is None:
+                            collected_at = collected_at.replace(tzinfo=timezone.utc)
+                        elapsed = now - collected_at
+                        elapsed_hours = elapsed.total_seconds() / 3600
+                    except Exception:
+                        elapsed_hours = 0.0
+
+                threat_type = self._classify_threat_type(doc, source)
+                half_life = self._half_lives.get(threat_type, self._half_lives["default"])
+                current_conf = self._decay(original_conf, elapsed_hours, half_life)
+
+                status = "active"
+                if current_conf < 0.1:
+                    status = "expired"
+                elif current_conf < 0.3:
+                    status = "critical"
+
+                return DecayItem(
+                    id=intelligence_id,
+                    content=doc,
+                    source=source,
+                    original_confidence=original_conf,
+                    current_confidence=current_conf,
+                    half_life_hours=half_life,
+                    elapsed_hours=elapsed_hours,
+                    threat_type=threat_type,
+                    status=status,
+                )
+
+        return DecayItem(
+            id=intelligence_id,
+            content="",
+            source="unknown",
+            original_confidence=0.0,
+            current_confidence=0.0,
+            half_life_hours=0.0,
+            elapsed_hours=0.0,
+            threat_type="unknown",
+            status="unknown",
+        )
+
+    async def compute_decay_curve(self, intelligence_id: str, hours: int = 168, step: int = 6) -> Dict:
+        item = await self.compute_current_confidence(intelligence_id)
+        if item.status == "unknown":
+            return {
+                "intelligence_id": intelligence_id,
+                "curve": [],
+                "half_life_hours": 0,
+                "threat_type": "unknown",
+            }
+
+        curve = []
+        half_life = item.half_life_hours
+        original_conf = item.original_confidence
+        elapsed = item.elapsed_hours
+
+        for h in range(0, hours + step, step):
+            total_elapsed = elapsed + h
+            conf = self._decay(original_conf, total_elapsed, half_life)
+            curve.append({
+                "hours_ahead": h,
+                "total_elapsed_hours": round(total_elapsed, 1),
+                "confidence": round(conf, 4),
+            })
+
+        return {
+            "intelligence_id": intelligence_id,
+            "curve": curve,
+            "half_life_hours": round(half_life, 2),
+            "threat_type": item.threat_type,
+            "current_confidence": round(item.current_confidence, 4),
+            "original_confidence": round(item.original_confidence, 4),
+        }

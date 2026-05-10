@@ -933,6 +933,8 @@ class IntelligenceOrganismEngine:
                 continue
 
             check_time = datetime.fromisoformat(organism.next_check_at)
+            if check_time.tzinfo is None:
+                check_time = check_time.replace(tzinfo=timezone.utc)
             if now < check_time:
                 continue
 

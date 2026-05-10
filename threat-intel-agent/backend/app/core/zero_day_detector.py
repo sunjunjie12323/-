@@ -14,6 +14,30 @@ from app.core.blacktalk_engine import BlackTalkEngine
 from app.core.vector_store import VectorStore
 
 
+class ZeroDayTerm:
+    __slots__ = ("term", "normal_meaning", "criminal_meaning", "confidence", "context", "category", "is_truly_new")
+
+    def __init__(self, term: str, normal_meaning: str, criminal_meaning: str, confidence: float, context: str, category: str, is_truly_new: bool):
+        self.term = term
+        self.normal_meaning = normal_meaning
+        self.criminal_meaning = criminal_meaning
+        self.confidence = confidence
+        self.context = context
+        self.category = category
+        self.is_truly_new = is_truly_new
+
+    def to_dict(self) -> dict:
+        return {
+            "term": self.term,
+            "normal_meaning": self.normal_meaning,
+            "criminal_meaning": self.criminal_meaning,
+            "confidence": self.confidence,
+            "context": self.context,
+            "category": self.category,
+            "is_truly_new": self.is_truly_new,
+        }
+
+
 @np.errstate(divide="ignore", invalid="ignore")
 def _safe_kl(p: np.ndarray, q: np.ndarray) -> float:
     p = np.clip(p, 1e-10, None)
@@ -285,8 +309,6 @@ class ZeroDayDetector:
         return unique
 
     async def detect_zero_day_terms(self, text: str) -> List:
-        from app.core.zero_day_detector import ZeroDayTerm
-
         if not self._trained:
             self._try_load_model()
 

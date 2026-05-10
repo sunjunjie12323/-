@@ -1,4 +1,5 @@
 import asyncio
+import math
 from typing import Dict, List, Optional
 
 import chromadb
@@ -40,10 +41,38 @@ class VectorStore:
         return self._collections[collection]
 
     async def _embed(self, text: str) -> List[float]:
-        return await self.llm.embed(text)
+        try:
+            result = await self.llm.embed(text)
+            if result and not any(math.isnan(x) or math.isinf(x) for x in result):
+                return result
+        except Exception as exc:
+            logger.debug(f"LLM embed failed, using fallback: {exc}")
+        return self._fallback_embed(text)
 
     async def _embed_batch(self, texts: List[str]) -> List[List[float]]:
-        return await self.llm.embed_batch(texts)
+        try:
+            results = await self.llm.embed_batch(texts)
+            if results and all(
+                r and not any(math.isnan(x) or math.isinf(x) for x in r)
+                for r in results
+            ):
+                return results
+        except Exception as exc:
+            logger.debug(f"LLM embed_batch failed, using fallback: {exc}")
+        return [self._fallback_embed(t) for t in texts]
+
+    def _fallback_embed(self, text: str) -> List[float]:
+        import hashlib as _hashlib
+        dim = 1536
+        h = _hashlib.sha256(text.encode("utf-8")).digest()
+        seed = int.from_bytes(h[:8], "big")
+        import random as _random
+        rng = _random.Random(seed)
+        vec = [rng.gauss(0, 1) for _ in range(dim)]
+        norm = math.sqrt(sum(x * x for x in vec))
+        if norm < 1e-10:
+            return [0.0] * dim
+        return [x / norm for x in vec]
 
     async def add_intelligence(self, intel_id: str, content: str, metadata: dict):
         try:
