@@ -219,6 +219,677 @@
       "first_seen": "2026-05-10 05:39:00.717975",
       "last_seen": "2026-05-10 05:39:00.717989",
       "metadata": {}
+    },
+    "0ed081803cfc4dee9860a329deeb7e26": {
+      "id": "0ed081803cfc4dee9860a329deeb7e26",
+      "type": "organization",
+      "value": "XX跑分平台",
+      "context": "Telegram群组中发现的跑分洗钱平台",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:18:32.345615",
+      "last_seen": "2026-05-10 06:18:32.345618",
+      "metadata": {}
+    },
+    "1c1d8e0bddec4acbb7b8e888df9b90fb": {
+      "id": "1c1d8e0bddec4acbb7b8e888df9b90fb",
+      "type": "tool",
+      "value": "猫池设备",
+      "context": "批量收发短信验证码的设备",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 06:18:32.345781",
+      "last_seen": "2026-05-10 06:18:32.345783",
+      "metadata": {}
+    },
+    "e460f533a56547b59f9c2cd593307a74": {
+      "id": "e460f533a56547b59f9c2cd593307a74",
+      "type": "tool",
+      "value": "撞库工具",
+      "context": "批量检测账号密码的工具",
+      "source_ids": [],
+      "confidence": 0.88,
+      "first_seen": "2026-05-10 06:18:32.345884",
+      "last_seen": "2026-05-10 06:18:32.345886",
+      "metadata": {}
+    },
+    "3067b055404f4804929d683e97f022f3": {
+      "id": "3067b055404f4804929d683e97f022f3",
+      "type": "account",
+      "value": "@paofen888",
+      "context": "跑分平台Telegram联系方式",
+      "source_ids": [],
+      "confidence": 0.95,
+      "first_seen": "2026-05-10 06:18:32.345975",
+      "last_seen": "2026-05-10 06:18:32.345977",
+      "metadata": {}
+    },
+    "0758dd48e7e3415e8b2c834f9f2c090d": {
+      "id": "0758dd48e7e3415e8b2c834f9f2c090d",
+      "type": "account",
+      "value": "@sijiantao_shop",
+      "context": "四件套贩卖Telegram联系方式",
+      "source_ids": [],
+      "confidence": 0.92,
+      "first_seen": "2026-05-10 06:18:32.346060",
+      "last_seen": "2026-05-10 06:18:32.346062",
+      "metadata": {}
+    },
+    "209633eff970413b8a041d4a9d5f8929": {
+      "id": "209633eff970413b8a041d4a9d5f8929",
+      "type": "payment_method",
+      "value": "BTC支付",
+      "context": "暗网交易常用支付方式",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:18:32.346137",
+      "last_seen": "2026-05-10 06:18:32.346139",
+      "metadata": {}
+    },
+    "fee7fba9296644ec9ea6aa06a1daeaa9": {
+      "id": "fee7fba9296644ec9ea6aa06a1daeaa9",
+      "type": "malware",
+      "value": "RAT远控木马",
+      "context": "远程控制恶意软件",
+      "source_ids": [],
+      "confidence": 0.87,
+      "first_seen": "2026-05-10 06:18:32.346211",
+      "last_seen": "2026-05-10 06:18:32.346212",
+      "metadata": {}
+    },
+    "7070ddb833ce4f3cb7d4af2440691dc9": {
+      "id": "7070ddb833ce4f3cb7d4af2440691dc9",
+      "type": "service",
+      "value": "接码平台",
+      "context": "提供手机验证码代收服务",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:18:32.346282",
+      "last_seen": "2026-05-10 06:18:32.346283",
+      "metadata": {}
+    },
+    "b7da8c5c0b2a455092152b4d8d376718": {
+      "id": "b7da8c5c0b2a455092152b4d8d376718",
+      "type": "service",
+      "value": "DDoS攻击服务",
+      "context": "按小时收费的DDoS攻击服务",
+      "source_ids": [],
+      "confidence": 0.82,
+      "first_seen": "2026-05-10 06:18:32.346352",
+      "last_seen": "2026-05-10 06:18:32.346353",
+      "metadata": {}
+    },
+    "313402c377e2472b921ef48b8364254d": {
+      "id": "313402c377e2472b921ef48b8364254d",
+      "type": "person",
+      "value": "盘总",
+      "context": "杀猪盘项目组织者",
+      "source_ids": [],
+      "confidence": 0.75,
+      "first_seen": "2026-05-10 06:18:32.346421",
+      "last_seen": "2026-05-10 06:18:32.346422",
+      "metadata": {}
+    },
+    "661e81d15e604022936f26be96e1865d": {
+      "id": "661e81d15e604022936f26be96e1865d",
+      "type": "person",
+      "value": "水房老板",
+      "context": "洗钱通道运营者",
+      "source_ids": [],
+      "confidence": 0.78,
+      "first_seen": "2026-05-10 06:18:32.346493",
+      "last_seen": "2026-05-10 06:18:32.346495",
+      "metadata": {}
+    },
+    "c27a5a1ca88745ca98953b2ce4de6116": {
+      "id": "c27a5a1ca88745ca98953b2ce4de6116",
+      "type": "tool",
+      "value": "钓鱼工具包",
+      "context": "针对中国银行的钓鱼网站套件",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 06:18:32.346561",
+      "last_seen": "2026-05-10 06:18:32.346562",
+      "metadata": {}
+    },
+    "d77983e9e4ec48f1b32742c4a2d2048d": {
+      "id": "d77983e9e4ec48f1b32742c4a2d2048d",
+      "type": "crypto_wallet",
+      "value": "bc1q...暗网收款地址",
+      "context": "暗网市场常用BTC收款地址",
+      "source_ids": [],
+      "confidence": 0.7,
+      "first_seen": "2026-05-10 06:18:32.346633",
+      "last_seen": "2026-05-10 06:18:32.346634",
+      "metadata": {}
+    },
+    "733b3ae9a34947589797ed84b70d867a": {
+      "id": "733b3ae9a34947589797ed84b70d867a",
+      "type": "organization",
+      "value": "XX菠菜平台",
+      "context": "网络赌博平台",
+      "source_ids": [],
+      "confidence": 0.83,
+      "first_seen": "2026-05-10 06:18:32.346699",
+      "last_seen": "2026-05-10 06:18:32.346700",
+      "metadata": {}
+    },
+    "45c6811471904fc19b77cf6fb1dff384": {
+      "id": "45c6811471904fc19b77cf6fb1dff384",
+      "type": "tool",
+      "value": "蜘蛛池",
+      "context": "SEO黑帽技术中的链接农场工具",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:18:32.346763",
+      "last_seen": "2026-05-10 06:18:32.346765",
+      "metadata": {}
+    },
+    "11743385102b484aa28aa5d268a97ba3": {
+      "id": "11743385102b484aa28aa5d268a97ba3",
+      "type": "ip",
+      "value": "185.220.101.xxx",
+      "context": "暗网市场服务器IP",
+      "source_ids": [],
+      "confidence": 0.65,
+      "first_seen": "2026-05-10 06:18:32.346825",
+      "last_seen": "2026-05-10 06:18:32.346827",
+      "metadata": {}
+    },
+    "8d3079d4118745c6936bc07ef7639f2c": {
+      "id": "8d3079d4118745c6936bc07ef7639f2c",
+      "type": "domain",
+      "value": "darkmarketx.onion",
+      "context": "暗网市场域名",
+      "source_ids": [],
+      "confidence": 0.88,
+      "first_seen": "2026-05-10 06:18:32.346888",
+      "last_seen": "2026-05-10 06:18:32.346889",
+      "metadata": {}
+    },
+    "a320c863a6a44f17b6adea1b8626932f": {
+      "id": "a320c863a6a44f17b6adea1b8626932f",
+      "type": "service",
+      "value": "养号服务",
+      "context": "批量培育社交媒体账号",
+      "source_ids": [],
+      "confidence": 0.82,
+      "first_seen": "2026-05-10 06:18:32.346951",
+      "last_seen": "2026-05-10 06:18:32.346953",
+      "metadata": {}
+    },
+    "e4ee4d5df4134bdb86bfb459a841c3cd": {
+      "id": "e4ee4d5df4134bdb86bfb459a841c3cd",
+      "type": "tool",
+      "value": "AI换脸工具",
+      "context": "用于绕过活体检测的深度伪造工具",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:18:32.347014",
+      "last_seen": "2026-05-10 06:18:32.347015",
+      "metadata": {}
+    },
+    "394a868d9e3f46df84eefab77ab2104b": {
+      "id": "394a868d9e3f46df84eefab77ab2104b",
+      "type": "organization",
+      "value": "XX资金盘",
+      "context": "疑似庞氏骗局平台",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:18:32.347075",
+      "last_seen": "2026-05-10 06:18:32.347076",
+      "metadata": {}
+    },
+    "bc7c9694f18943ca9559dd27e4093ff6": {
+      "id": "bc7c9694f18943ca9559dd27e4093ff6",
+      "type": "organization",
+      "value": "XX跑分平台",
+      "context": "Telegram群组中发现的跑分洗钱平台",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:23:09.690807",
+      "last_seen": "2026-05-10 06:23:09.690811",
+      "metadata": {}
+    },
+    "840fdd759f0c42558c36534d383732a1": {
+      "id": "840fdd759f0c42558c36534d383732a1",
+      "type": "tool",
+      "value": "猫池设备",
+      "context": "批量收发短信验证码的设备",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 06:23:09.691042",
+      "last_seen": "2026-05-10 06:23:09.691044",
+      "metadata": {}
+    },
+    "cb78e3a76e39481caa141008106ed351": {
+      "id": "cb78e3a76e39481caa141008106ed351",
+      "type": "tool",
+      "value": "撞库工具",
+      "context": "批量检测账号密码的工具",
+      "source_ids": [],
+      "confidence": 0.88,
+      "first_seen": "2026-05-10 06:23:09.691142",
+      "last_seen": "2026-05-10 06:23:09.691144",
+      "metadata": {}
+    },
+    "d48e0d8e04994ee1846d9f7f1395322b": {
+      "id": "d48e0d8e04994ee1846d9f7f1395322b",
+      "type": "account",
+      "value": "@paofen888",
+      "context": "跑分平台Telegram联系方式",
+      "source_ids": [],
+      "confidence": 0.95,
+      "first_seen": "2026-05-10 06:23:09.691230",
+      "last_seen": "2026-05-10 06:23:09.691231",
+      "metadata": {}
+    },
+    "e3c0bcde2eaa40dbaf41c8c2f08dbe2a": {
+      "id": "e3c0bcde2eaa40dbaf41c8c2f08dbe2a",
+      "type": "account",
+      "value": "@sijiantao_shop",
+      "context": "四件套贩卖Telegram联系方式",
+      "source_ids": [],
+      "confidence": 0.92,
+      "first_seen": "2026-05-10 06:23:09.691338",
+      "last_seen": "2026-05-10 06:23:09.691340",
+      "metadata": {}
+    },
+    "34eec168715144c6876402c1fc434d0d": {
+      "id": "34eec168715144c6876402c1fc434d0d",
+      "type": "payment_method",
+      "value": "BTC支付",
+      "context": "暗网交易常用支付方式",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:23:09.691409",
+      "last_seen": "2026-05-10 06:23:09.691411",
+      "metadata": {}
+    },
+    "5893c4c9debf495889759b1129df4bce": {
+      "id": "5893c4c9debf495889759b1129df4bce",
+      "type": "malware",
+      "value": "RAT远控木马",
+      "context": "远程控制恶意软件",
+      "source_ids": [],
+      "confidence": 0.87,
+      "first_seen": "2026-05-10 06:23:09.691484",
+      "last_seen": "2026-05-10 06:23:09.691485",
+      "metadata": {}
+    },
+    "6e20095ccd574b6991383ec68bfa940f": {
+      "id": "6e20095ccd574b6991383ec68bfa940f",
+      "type": "service",
+      "value": "接码平台",
+      "context": "提供手机验证码代收服务",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:23:09.691549",
+      "last_seen": "2026-05-10 06:23:09.691550",
+      "metadata": {}
+    },
+    "05a0536f34de4dd0bbe4b307a7cf134e": {
+      "id": "05a0536f34de4dd0bbe4b307a7cf134e",
+      "type": "service",
+      "value": "DDoS攻击服务",
+      "context": "按小时收费的DDoS攻击服务",
+      "source_ids": [],
+      "confidence": 0.82,
+      "first_seen": "2026-05-10 06:23:09.691611",
+      "last_seen": "2026-05-10 06:23:09.691613",
+      "metadata": {}
+    },
+    "ac6e2b9b2da1441f912644266ce381a3": {
+      "id": "ac6e2b9b2da1441f912644266ce381a3",
+      "type": "person",
+      "value": "盘总",
+      "context": "杀猪盘项目组织者",
+      "source_ids": [],
+      "confidence": 0.75,
+      "first_seen": "2026-05-10 06:23:09.691674",
+      "last_seen": "2026-05-10 06:23:09.691675",
+      "metadata": {}
+    },
+    "89ade037bd44406d9bf6fc145700c86d": {
+      "id": "89ade037bd44406d9bf6fc145700c86d",
+      "type": "person",
+      "value": "水房老板",
+      "context": "洗钱通道运营者",
+      "source_ids": [],
+      "confidence": 0.78,
+      "first_seen": "2026-05-10 06:23:09.691740",
+      "last_seen": "2026-05-10 06:23:09.691741",
+      "metadata": {}
+    },
+    "2f51a626cc8946c2b61222a09e67c853": {
+      "id": "2f51a626cc8946c2b61222a09e67c853",
+      "type": "tool",
+      "value": "钓鱼工具包",
+      "context": "针对中国银行的钓鱼网站套件",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 06:23:09.691802",
+      "last_seen": "2026-05-10 06:23:09.691803",
+      "metadata": {}
+    },
+    "aedd1251740e494587bfa9c5b44a2f2a": {
+      "id": "aedd1251740e494587bfa9c5b44a2f2a",
+      "type": "crypto_wallet",
+      "value": "bc1q...暗网收款地址",
+      "context": "暗网市场常用BTC收款地址",
+      "source_ids": [],
+      "confidence": 0.7,
+      "first_seen": "2026-05-10 06:23:09.691866",
+      "last_seen": "2026-05-10 06:23:09.691867",
+      "metadata": {}
+    },
+    "c73f68e5803a4dcf8b22249aee132174": {
+      "id": "c73f68e5803a4dcf8b22249aee132174",
+      "type": "organization",
+      "value": "XX菠菜平台",
+      "context": "网络赌博平台",
+      "source_ids": [],
+      "confidence": 0.83,
+      "first_seen": "2026-05-10 06:23:09.691926",
+      "last_seen": "2026-05-10 06:23:09.691928",
+      "metadata": {}
+    },
+    "2352102a5a194426a93c68f5417f6052": {
+      "id": "2352102a5a194426a93c68f5417f6052",
+      "type": "tool",
+      "value": "蜘蛛池",
+      "context": "SEO黑帽技术中的链接农场工具",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:23:09.691985",
+      "last_seen": "2026-05-10 06:23:09.691986",
+      "metadata": {}
+    },
+    "71a2fd4a31e041e1aa840b89f7d7531c": {
+      "id": "71a2fd4a31e041e1aa840b89f7d7531c",
+      "type": "ip",
+      "value": "185.220.101.xxx",
+      "context": "暗网市场服务器IP",
+      "source_ids": [],
+      "confidence": 0.65,
+      "first_seen": "2026-05-10 06:23:09.692042",
+      "last_seen": "2026-05-10 06:23:09.692043",
+      "metadata": {}
+    },
+    "4fb19a989cc041b3b60b819896cd40a3": {
+      "id": "4fb19a989cc041b3b60b819896cd40a3",
+      "type": "domain",
+      "value": "darkmarketx.onion",
+      "context": "暗网市场域名",
+      "source_ids": [],
+      "confidence": 0.88,
+      "first_seen": "2026-05-10 06:23:09.692101",
+      "last_seen": "2026-05-10 06:23:09.692103",
+      "metadata": {}
+    },
+    "9e29c0f38ce84ac98b44efd84a3c0cff": {
+      "id": "9e29c0f38ce84ac98b44efd84a3c0cff",
+      "type": "service",
+      "value": "养号服务",
+      "context": "批量培育社交媒体账号",
+      "source_ids": [],
+      "confidence": 0.82,
+      "first_seen": "2026-05-10 06:23:09.692162",
+      "last_seen": "2026-05-10 06:23:09.692164",
+      "metadata": {}
+    },
+    "d5a8162c521a4924b101162c8339b97a": {
+      "id": "d5a8162c521a4924b101162c8339b97a",
+      "type": "tool",
+      "value": "AI换脸工具",
+      "context": "用于绕过活体检测的深度伪造工具",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:23:09.692224",
+      "last_seen": "2026-05-10 06:23:09.692225",
+      "metadata": {}
+    },
+    "09c21f6fa4ad40ea926ff0b43418909a": {
+      "id": "09c21f6fa4ad40ea926ff0b43418909a",
+      "type": "organization",
+      "value": "XX资金盘",
+      "context": "疑似庞氏骗局平台",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:23:09.692283",
+      "last_seen": "2026-05-10 06:23:09.692285",
+      "metadata": {}
+    },
+    "2a0a71d512e6411fb4ccd078994f87e5": {
+      "id": "2a0a71d512e6411fb4ccd078994f87e5",
+      "type": "organization",
+      "value": "XX跑分平台",
+      "context": "Telegram群组中发现的跑分洗钱平台",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:31:08.272276",
+      "last_seen": "2026-05-10 06:31:08.272279",
+      "metadata": {}
+    },
+    "cb51a1f0ef24469cab76fbe7826b1667": {
+      "id": "cb51a1f0ef24469cab76fbe7826b1667",
+      "type": "tool",
+      "value": "猫池设备",
+      "context": "批量收发短信验证码的设备",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 06:31:08.272451",
+      "last_seen": "2026-05-10 06:31:08.272452",
+      "metadata": {}
+    },
+    "7ded9f0d7bcd4f3fbca5c68368a342b3": {
+      "id": "7ded9f0d7bcd4f3fbca5c68368a342b3",
+      "type": "tool",
+      "value": "撞库工具",
+      "context": "批量检测账号密码的工具",
+      "source_ids": [],
+      "confidence": 0.88,
+      "first_seen": "2026-05-10 06:31:08.272552",
+      "last_seen": "2026-05-10 06:31:08.272553",
+      "metadata": {}
+    },
+    "272c6079ae9143e6a48fd3bd2d3c89c9": {
+      "id": "272c6079ae9143e6a48fd3bd2d3c89c9",
+      "type": "account",
+      "value": "@paofen888",
+      "context": "跑分平台Telegram联系方式",
+      "source_ids": [],
+      "confidence": 0.95,
+      "first_seen": "2026-05-10 06:31:08.272640",
+      "last_seen": "2026-05-10 06:31:08.272642",
+      "metadata": {}
+    },
+    "40556ee89d914713bea34ff5fa619a41": {
+      "id": "40556ee89d914713bea34ff5fa619a41",
+      "type": "account",
+      "value": "@sijiantao_shop",
+      "context": "四件套贩卖Telegram联系方式",
+      "source_ids": [],
+      "confidence": 0.92,
+      "first_seen": "2026-05-10 06:31:08.272723",
+      "last_seen": "2026-05-10 06:31:08.272725",
+      "metadata": {}
+    },
+    "d47d5eecb3e6423ca8cf251f597a9116": {
+      "id": "d47d5eecb3e6423ca8cf251f597a9116",
+      "type": "payment_method",
+      "value": "BTC支付",
+      "context": "暗网交易常用支付方式",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:31:08.272799",
+      "last_seen": "2026-05-10 06:31:08.272800",
+      "metadata": {}
+    },
+    "e5f36035a980424eb70d7bd82fea8e96": {
+      "id": "e5f36035a980424eb70d7bd82fea8e96",
+      "type": "malware",
+      "value": "RAT远控木马",
+      "context": "远程控制恶意软件",
+      "source_ids": [],
+      "confidence": 0.87,
+      "first_seen": "2026-05-10 06:31:08.272866",
+      "last_seen": "2026-05-10 06:31:08.272868",
+      "metadata": {}
+    },
+    "6bea547384af4e41ba755f5757067ec4": {
+      "id": "6bea547384af4e41ba755f5757067ec4",
+      "type": "service",
+      "value": "接码平台",
+      "context": "提供手机验证码代收服务",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:31:08.272937",
+      "last_seen": "2026-05-10 06:31:08.272939",
+      "metadata": {}
+    },
+    "ef16e72378fe4bf8aeda2f4a59f38887": {
+      "id": "ef16e72378fe4bf8aeda2f4a59f38887",
+      "type": "service",
+      "value": "DDoS攻击服务",
+      "context": "按小时收费的DDoS攻击服务",
+      "source_ids": [],
+      "confidence": 0.82,
+      "first_seen": "2026-05-10 06:31:08.273000",
+      "last_seen": "2026-05-10 06:31:08.273002",
+      "metadata": {}
+    },
+    "11c27c8afa4a4669b46b1bf3a99c6dd0": {
+      "id": "11c27c8afa4a4669b46b1bf3a99c6dd0",
+      "type": "person",
+      "value": "盘总",
+      "context": "杀猪盘项目组织者",
+      "source_ids": [],
+      "confidence": 0.75,
+      "first_seen": "2026-05-10 06:31:08.273067",
+      "last_seen": "2026-05-10 06:31:08.273068",
+      "metadata": {}
+    },
+    "3d2d92b591584615ae260483d1ecb1a3": {
+      "id": "3d2d92b591584615ae260483d1ecb1a3",
+      "type": "person",
+      "value": "水房老板",
+      "context": "洗钱通道运营者",
+      "source_ids": [],
+      "confidence": 0.78,
+      "first_seen": "2026-05-10 06:31:08.273139",
+      "last_seen": "2026-05-10 06:31:08.273141",
+      "metadata": {}
+    },
+    "0ceabff8e7c740d98d57db7996e6f4e2": {
+      "id": "0ceabff8e7c740d98d57db7996e6f4e2",
+      "type": "tool",
+      "value": "钓鱼工具包",
+      "context": "针对中国银行的钓鱼网站套件",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 06:31:08.273207",
+      "last_seen": "2026-05-10 06:31:08.273208",
+      "metadata": {}
+    },
+    "d19fe9c4d2804158a569bfed0cf2e4d7": {
+      "id": "d19fe9c4d2804158a569bfed0cf2e4d7",
+      "type": "crypto_wallet",
+      "value": "bc1q...暗网收款地址",
+      "context": "暗网市场常用BTC收款地址",
+      "source_ids": [],
+      "confidence": 0.7,
+      "first_seen": "2026-05-10 06:31:08.273272",
+      "last_seen": "2026-05-10 06:31:08.273273",
+      "metadata": {}
+    },
+    "b5f2813eaf72447c8ba98393fdef2df5": {
+      "id": "b5f2813eaf72447c8ba98393fdef2df5",
+      "type": "organization",
+      "value": "XX菠菜平台",
+      "context": "网络赌博平台",
+      "source_ids": [],
+      "confidence": 0.83,
+      "first_seen": "2026-05-10 06:31:08.273339",
+      "last_seen": "2026-05-10 06:31:08.273340",
+      "metadata": {}
+    },
+    "b6543943ff1e49c3ae13317f7c441cb3": {
+      "id": "b6543943ff1e49c3ae13317f7c441cb3",
+      "type": "tool",
+      "value": "蜘蛛池",
+      "context": "SEO黑帽技术中的链接农场工具",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:31:08.273403",
+      "last_seen": "2026-05-10 06:31:08.273404",
+      "metadata": {}
+    },
+    "e0a56f9855114fb99da550034a511a9d": {
+      "id": "e0a56f9855114fb99da550034a511a9d",
+      "type": "ip",
+      "value": "185.220.101.xxx",
+      "context": "暗网市场服务器IP",
+      "source_ids": [],
+      "confidence": 0.65,
+      "first_seen": "2026-05-10 06:31:08.273467",
+      "last_seen": "2026-05-10 06:31:08.273469",
+      "metadata": {}
+    },
+    "75d1fe42bbe6425da7ca3b43a8592b7b": {
+      "id": "75d1fe42bbe6425da7ca3b43a8592b7b",
+      "type": "domain",
+      "value": "darkmarketx.onion",
+      "context": "暗网市场域名",
+      "source_ids": [],
+      "confidence": 0.88,
+      "first_seen": "2026-05-10 06:31:08.273528",
+      "last_seen": "2026-05-10 06:31:08.273529",
+      "metadata": {}
+    },
+    "ab26c1abac214d9a8b04bfdc33c729af": {
+      "id": "ab26c1abac214d9a8b04bfdc33c729af",
+      "type": "service",
+      "value": "养号服务",
+      "context": "批量培育社交媒体账号",
+      "source_ids": [],
+      "confidence": 0.82,
+      "first_seen": "2026-05-10 06:31:08.273593",
+      "last_seen": "2026-05-10 06:31:08.273594",
+      "metadata": {}
+    },
+    "c93d78a7df9d497fb460a6144f9c321f": {
+      "id": "c93d78a7df9d497fb460a6144f9c321f",
+      "type": "tool",
+      "value": "AI换脸工具",
+      "context": "用于绕过活体检测的深度伪造工具",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 06:31:08.273658",
+      "last_seen": "2026-05-10 06:31:08.273659",
+      "metadata": {}
+    },
+    "f6585982daa3403fa4f3642483b02811": {
+      "id": "f6585982daa3403fa4f3642483b02811",
+      "type": "organization",
+      "value": "XX资金盘",
+      "context": "疑似庞氏骗局平台",
+      "source_ids": [],
+      "confidence": 0.8,
+      "first_seen": "2026-05-10 06:31:08.273724",
+      "last_seen": "2026-05-10 06:31:08.273725",
+      "metadata": {}
+    },
+    "26b012eb25674ffeb9461d7f49dfb65f": {
+      "id": "26b012eb25674ffeb9461d7f49dfb65f",
+      "type": "ip",
+      "value": "1.2.3.4",
+      "context": "t",
+      "source_ids": [],
+      "confidence": 0.5,
+      "first_seen": "2026-05-10 06:32:29.047425",
+      "last_seen": "2026-05-10 06:32:29.047428",
+      "metadata": {}
     }
   },
   "relations": {
@@ -371,6 +1042,456 @@
       "evidence": "两个Telegram账号在群组中互动",
       "first_seen": "2026-05-10 05:39:00.719369",
       "last_seen": "2026-05-10 05:39:00.719371"
+    },
+    "cc06caa27f6c49c3bca563c22c58db88": {
+      "id": "cc06caa27f6c49c3bca563c22c58db88",
+      "source_entity_id": "0ed081803cfc4dee9860a329deeb7e26",
+      "target_entity_id": "1c1d8e0bddec4acbb7b8e888df9b90fb",
+      "type": "uses",
+      "confidence": 0.78,
+      "evidence": "跑分平台使用猫池设备接收验证码",
+      "first_seen": "2026-05-10 06:18:32.347152",
+      "last_seen": "2026-05-10 06:18:32.347153"
+    },
+    "f2f705ced80343cda68ec17441bbf309": {
+      "id": "f2f705ced80343cda68ec17441bbf309",
+      "source_entity_id": "0ed081803cfc4dee9860a329deeb7e26",
+      "target_entity_id": "3067b055404f4804929d683e97f022f3",
+      "type": "controls",
+      "confidence": 0.94,
+      "evidence": "跑分平台通过此Telegram账号联系",
+      "first_seen": "2026-05-10 06:18:32.347232",
+      "last_seen": "2026-05-10 06:18:32.347234"
+    },
+    "9c3acafeaa7d45738fffda56e945a9ab": {
+      "id": "9c3acafeaa7d45738fffda56e945a9ab",
+      "source_entity_id": "1c1d8e0bddec4acbb7b8e888df9b90fb",
+      "target_entity_id": "7070ddb833ce4f3cb7d4af2440691dc9",
+      "type": "uses",
+      "confidence": 0.78,
+      "evidence": "猫池设备对接接码平台",
+      "first_seen": "2026-05-10 06:18:32.347332",
+      "last_seen": "2026-05-10 06:18:32.347334"
+    },
+    "1c58a233a0c94b0ea0ac6709016e9c28": {
+      "id": "1c58a233a0c94b0ea0ac6709016e9c28",
+      "source_entity_id": "0758dd48e7e3415e8b2c834f9f2c090d",
+      "target_entity_id": "209633eff970413b8a041d4a9d5f8929",
+      "type": "uses",
+      "confidence": 0.86,
+      "evidence": "四件套贩卖使用BTC收款",
+      "first_seen": "2026-05-10 06:18:32.347407",
+      "last_seen": "2026-05-10 06:18:32.347408"
+    },
+    "1cdfdef2e2684560a811a0b90a1383b0": {
+      "id": "1cdfdef2e2684560a811a0b90a1383b0",
+      "source_entity_id": "313402c377e2472b921ef48b8364254d",
+      "target_entity_id": "0ed081803cfc4dee9860a329deeb7e26",
+      "type": "operates",
+      "confidence": 0.79,
+      "evidence": "盘总运营跑分平台",
+      "first_seen": "2026-05-10 06:18:32.347485",
+      "last_seen": "2026-05-10 06:18:32.347486"
+    },
+    "cd51af7e41f34fab9fd2188b85be2bef": {
+      "id": "cd51af7e41f34fab9fd2188b85be2bef",
+      "source_entity_id": "661e81d15e604022936f26be96e1865d",
+      "target_entity_id": "0ed081803cfc4dee9860a329deeb7e26",
+      "type": "associated_with",
+      "confidence": 0.71,
+      "evidence": "水房老板与跑分平台合作洗钱",
+      "first_seen": "2026-05-10 06:18:32.347559",
+      "last_seen": "2026-05-10 06:18:32.347561"
+    },
+    "f924e2f7ab344767addc81e4d40a7e9d": {
+      "id": "f924e2f7ab344767addc81e4d40a7e9d",
+      "source_entity_id": "fee7fba9296644ec9ea6aa06a1daeaa9",
+      "target_entity_id": "8d3079d4118745c6936bc07ef7639f2c",
+      "type": "located_in",
+      "confidence": 0.76,
+      "evidence": "RAT远控木马部署在暗网服务器",
+      "first_seen": "2026-05-10 06:18:32.347627",
+      "last_seen": "2026-05-10 06:18:32.347629"
+    },
+    "2afda9d98b2e469ca2fce55e3fb565c3": {
+      "id": "2afda9d98b2e469ca2fce55e3fb565c3",
+      "source_entity_id": "c27a5a1ca88745ca98953b2ce4de6116",
+      "target_entity_id": "8d3079d4118745c6936bc07ef7639f2c",
+      "type": "associated_with",
+      "confidence": 0.77,
+      "evidence": "钓鱼工具包在暗网市场出售",
+      "first_seen": "2026-05-10 06:18:32.347696",
+      "last_seen": "2026-05-10 06:18:32.347697"
+    },
+    "a1111c494ccd4a44ad534a6ba6cfb933": {
+      "id": "a1111c494ccd4a44ad534a6ba6cfb933",
+      "source_entity_id": "733b3ae9a34947589797ed84b70d867a",
+      "target_entity_id": "45c6811471904fc19b77cf6fb1dff384",
+      "type": "uses",
+      "confidence": 0.73,
+      "evidence": "菠菜平台使用蜘蛛池做SEO",
+      "first_seen": "2026-05-10 06:18:32.347761",
+      "last_seen": "2026-05-10 06:18:32.347762"
+    },
+    "cd5eec84bb6e40c89bcd08beb1498a54": {
+      "id": "cd5eec84bb6e40c89bcd08beb1498a54",
+      "source_entity_id": "e460f533a56547b59f9c2cd593307a74",
+      "target_entity_id": "a320c863a6a44f17b6adea1b8626932f",
+      "type": "uses",
+      "confidence": 0.87,
+      "evidence": "撞库工具需要养号服务提供账号",
+      "first_seen": "2026-05-10 06:18:32.347833",
+      "last_seen": "2026-05-10 06:18:32.347835"
+    },
+    "8e24dcb625ee4bcf8da40793bd705af7": {
+      "id": "8e24dcb625ee4bcf8da40793bd705af7",
+      "source_entity_id": "e4ee4d5df4134bdb86bfb459a841c3cd",
+      "target_entity_id": "7070ddb833ce4f3cb7d4af2440691dc9",
+      "type": "uses",
+      "confidence": 0.91,
+      "evidence": "AI换脸工具配合接码平台绕过认证",
+      "first_seen": "2026-05-10 06:18:32.347899",
+      "last_seen": "2026-05-10 06:18:32.347900"
+    },
+    "5031b4ada91b4bb18bfa2af7b36b5c9d": {
+      "id": "5031b4ada91b4bb18bfa2af7b36b5c9d",
+      "source_entity_id": "394a868d9e3f46df84eefab77ab2104b",
+      "target_entity_id": "661e81d15e604022936f26be96e1865d",
+      "type": "associated_with",
+      "confidence": 0.89,
+      "evidence": "资金盘与洗钱通道关联",
+      "first_seen": "2026-05-10 06:18:32.347966",
+      "last_seen": "2026-05-10 06:18:32.347967"
+    },
+    "fb92aaabbe3543e2b0725ad4895b1ee5": {
+      "id": "fb92aaabbe3543e2b0725ad4895b1ee5",
+      "source_entity_id": "b7da8c5c0b2a455092152b4d8d376718",
+      "target_entity_id": "11743385102b484aa28aa5d268a97ba3",
+      "type": "located_in",
+      "confidence": 0.75,
+      "evidence": "DDoS服务使用暗网服务器",
+      "first_seen": "2026-05-10 06:18:32.348035",
+      "last_seen": "2026-05-10 06:18:32.348037"
+    },
+    "df89ebaa1d2244b289149cb9dec5f2cd": {
+      "id": "df89ebaa1d2244b289149cb9dec5f2cd",
+      "source_entity_id": "0ed081803cfc4dee9860a329deeb7e26",
+      "target_entity_id": "661e81d15e604022936f26be96e1865d",
+      "type": "uses",
+      "confidence": 0.73,
+      "evidence": "跑分平台使用水房通道洗钱",
+      "first_seen": "2026-05-10 06:18:32.348104",
+      "last_seen": "2026-05-10 06:18:32.348105"
+    },
+    "51e4c9d22e9d4a118da6a4a57606f42e": {
+      "id": "51e4c9d22e9d4a118da6a4a57606f42e",
+      "source_entity_id": "3067b055404f4804929d683e97f022f3",
+      "target_entity_id": "0758dd48e7e3415e8b2c834f9f2c090d",
+      "type": "communicates_with",
+      "confidence": 0.77,
+      "evidence": "两个Telegram账号在群组中互动",
+      "first_seen": "2026-05-10 06:18:32.348170",
+      "last_seen": "2026-05-10 06:18:32.348171"
+    },
+    "54a8f77b907e4bdaa1e68a0a2162ff46": {
+      "id": "54a8f77b907e4bdaa1e68a0a2162ff46",
+      "source_entity_id": "bc7c9694f18943ca9559dd27e4093ff6",
+      "target_entity_id": "840fdd759f0c42558c36534d383732a1",
+      "type": "uses",
+      "confidence": 0.8,
+      "evidence": "跑分平台使用猫池设备接收验证码",
+      "first_seen": "2026-05-10 06:23:09.692362",
+      "last_seen": "2026-05-10 06:23:09.692363"
+    },
+    "ecd7a20efda14bc589e3a69bbf15da2f": {
+      "id": "ecd7a20efda14bc589e3a69bbf15da2f",
+      "source_entity_id": "bc7c9694f18943ca9559dd27e4093ff6",
+      "target_entity_id": "d48e0d8e04994ee1846d9f7f1395322b",
+      "type": "controls",
+      "confidence": 0.76,
+      "evidence": "跑分平台通过此Telegram账号联系",
+      "first_seen": "2026-05-10 06:23:09.692438",
+      "last_seen": "2026-05-10 06:23:09.692440"
+    },
+    "e0948b6383534bbb87862f29fa2d4db5": {
+      "id": "e0948b6383534bbb87862f29fa2d4db5",
+      "source_entity_id": "840fdd759f0c42558c36534d383732a1",
+      "target_entity_id": "6e20095ccd574b6991383ec68bfa940f",
+      "type": "uses",
+      "confidence": 0.91,
+      "evidence": "猫池设备对接接码平台",
+      "first_seen": "2026-05-10 06:23:09.692504",
+      "last_seen": "2026-05-10 06:23:09.692506"
+    },
+    "1d74cc36bb5e4f94a938a3a7df2a7913": {
+      "id": "1d74cc36bb5e4f94a938a3a7df2a7913",
+      "source_entity_id": "e3c0bcde2eaa40dbaf41c8c2f08dbe2a",
+      "target_entity_id": "34eec168715144c6876402c1fc434d0d",
+      "type": "uses",
+      "confidence": 0.84,
+      "evidence": "四件套贩卖使用BTC收款",
+      "first_seen": "2026-05-10 06:23:09.692567",
+      "last_seen": "2026-05-10 06:23:09.692568"
+    },
+    "a567916d959e4b1ea51c4ed09b192bc5": {
+      "id": "a567916d959e4b1ea51c4ed09b192bc5",
+      "source_entity_id": "ac6e2b9b2da1441f912644266ce381a3",
+      "target_entity_id": "bc7c9694f18943ca9559dd27e4093ff6",
+      "type": "operates",
+      "confidence": 0.81,
+      "evidence": "盘总运营跑分平台",
+      "first_seen": "2026-05-10 06:23:09.692630",
+      "last_seen": "2026-05-10 06:23:09.692631"
+    },
+    "cb2aa35fcd0b4a44bad4ea5b822fb382": {
+      "id": "cb2aa35fcd0b4a44bad4ea5b822fb382",
+      "source_entity_id": "89ade037bd44406d9bf6fc145700c86d",
+      "target_entity_id": "bc7c9694f18943ca9559dd27e4093ff6",
+      "type": "associated_with",
+      "confidence": 0.85,
+      "evidence": "水房老板与跑分平台合作洗钱",
+      "first_seen": "2026-05-10 06:23:09.692699",
+      "last_seen": "2026-05-10 06:23:09.692700"
+    },
+    "4878b81152254bbcbfa4d66177231b54": {
+      "id": "4878b81152254bbcbfa4d66177231b54",
+      "source_entity_id": "5893c4c9debf495889759b1129df4bce",
+      "target_entity_id": "4fb19a989cc041b3b60b819896cd40a3",
+      "type": "located_in",
+      "confidence": 0.89,
+      "evidence": "RAT远控木马部署在暗网服务器",
+      "first_seen": "2026-05-10 06:23:09.692763",
+      "last_seen": "2026-05-10 06:23:09.692764"
+    },
+    "67e09fecf8394fcea4147407c17b9d17": {
+      "id": "67e09fecf8394fcea4147407c17b9d17",
+      "source_entity_id": "2f51a626cc8946c2b61222a09e67c853",
+      "target_entity_id": "4fb19a989cc041b3b60b819896cd40a3",
+      "type": "associated_with",
+      "confidence": 0.83,
+      "evidence": "钓鱼工具包在暗网市场出售",
+      "first_seen": "2026-05-10 06:23:09.692826",
+      "last_seen": "2026-05-10 06:23:09.692828"
+    },
+    "a4476b5ce4424d4689a5931001f310da": {
+      "id": "a4476b5ce4424d4689a5931001f310da",
+      "source_entity_id": "c73f68e5803a4dcf8b22249aee132174",
+      "target_entity_id": "2352102a5a194426a93c68f5417f6052",
+      "type": "uses",
+      "confidence": 0.76,
+      "evidence": "菠菜平台使用蜘蛛池做SEO",
+      "first_seen": "2026-05-10 06:23:09.692889",
+      "last_seen": "2026-05-10 06:23:09.692890"
+    },
+    "aa4773b4d4c74bec93b46ea5a0c6a01e": {
+      "id": "aa4773b4d4c74bec93b46ea5a0c6a01e",
+      "source_entity_id": "cb78e3a76e39481caa141008106ed351",
+      "target_entity_id": "9e29c0f38ce84ac98b44efd84a3c0cff",
+      "type": "uses",
+      "confidence": 0.83,
+      "evidence": "撞库工具需要养号服务提供账号",
+      "first_seen": "2026-05-10 06:23:09.692954",
+      "last_seen": "2026-05-10 06:23:09.692955"
+    },
+    "1deaf1a91ee04b2b80a02b4fe2ef10b2": {
+      "id": "1deaf1a91ee04b2b80a02b4fe2ef10b2",
+      "source_entity_id": "d5a8162c521a4924b101162c8339b97a",
+      "target_entity_id": "6e20095ccd574b6991383ec68bfa940f",
+      "type": "uses",
+      "confidence": 0.72,
+      "evidence": "AI换脸工具配合接码平台绕过认证",
+      "first_seen": "2026-05-10 06:23:09.693018",
+      "last_seen": "2026-05-10 06:23:09.693020"
+    },
+    "72ab5e213396413ea184e7e9b2ca9c5f": {
+      "id": "72ab5e213396413ea184e7e9b2ca9c5f",
+      "source_entity_id": "09c21f6fa4ad40ea926ff0b43418909a",
+      "target_entity_id": "89ade037bd44406d9bf6fc145700c86d",
+      "type": "associated_with",
+      "confidence": 0.82,
+      "evidence": "资金盘与洗钱通道关联",
+      "first_seen": "2026-05-10 06:23:09.693082",
+      "last_seen": "2026-05-10 06:23:09.693083"
+    },
+    "92c32113db9948f789f0a963123575ee": {
+      "id": "92c32113db9948f789f0a963123575ee",
+      "source_entity_id": "05a0536f34de4dd0bbe4b307a7cf134e",
+      "target_entity_id": "71a2fd4a31e041e1aa840b89f7d7531c",
+      "type": "located_in",
+      "confidence": 0.82,
+      "evidence": "DDoS服务使用暗网服务器",
+      "first_seen": "2026-05-10 06:23:09.693144",
+      "last_seen": "2026-05-10 06:23:09.693146"
+    },
+    "165900b813d0438a903b88000ad54559": {
+      "id": "165900b813d0438a903b88000ad54559",
+      "source_entity_id": "bc7c9694f18943ca9559dd27e4093ff6",
+      "target_entity_id": "89ade037bd44406d9bf6fc145700c86d",
+      "type": "uses",
+      "confidence": 0.88,
+      "evidence": "跑分平台使用水房通道洗钱",
+      "first_seen": "2026-05-10 06:23:09.693208",
+      "last_seen": "2026-05-10 06:23:09.693209"
+    },
+    "62597ae22b954e4aa41eafcf318f856e": {
+      "id": "62597ae22b954e4aa41eafcf318f856e",
+      "source_entity_id": "d48e0d8e04994ee1846d9f7f1395322b",
+      "target_entity_id": "e3c0bcde2eaa40dbaf41c8c2f08dbe2a",
+      "type": "communicates_with",
+      "confidence": 0.91,
+      "evidence": "两个Telegram账号在群组中互动",
+      "first_seen": "2026-05-10 06:23:09.693269",
+      "last_seen": "2026-05-10 06:23:09.693271"
+    },
+    "545f9f6d2f0e4de6ad230ed12608e025": {
+      "id": "545f9f6d2f0e4de6ad230ed12608e025",
+      "source_entity_id": "2a0a71d512e6411fb4ccd078994f87e5",
+      "target_entity_id": "cb51a1f0ef24469cab76fbe7826b1667",
+      "type": "uses",
+      "confidence": 0.93,
+      "evidence": "跑分平台使用猫池设备接收验证码",
+      "first_seen": "2026-05-10 06:31:08.273805",
+      "last_seen": "2026-05-10 06:31:08.273807"
+    },
+    "66d381e446d8457295e5cdb91dcaf74f": {
+      "id": "66d381e446d8457295e5cdb91dcaf74f",
+      "source_entity_id": "2a0a71d512e6411fb4ccd078994f87e5",
+      "target_entity_id": "272c6079ae9143e6a48fd3bd2d3c89c9",
+      "type": "controls",
+      "confidence": 0.82,
+      "evidence": "跑分平台通过此Telegram账号联系",
+      "first_seen": "2026-05-10 06:31:08.273888",
+      "last_seen": "2026-05-10 06:31:08.273890"
+    },
+    "94e1e4c68659435db4aa3c3e80f9de8e": {
+      "id": "94e1e4c68659435db4aa3c3e80f9de8e",
+      "source_entity_id": "cb51a1f0ef24469cab76fbe7826b1667",
+      "target_entity_id": "6bea547384af4e41ba755f5757067ec4",
+      "type": "uses",
+      "confidence": 0.78,
+      "evidence": "猫池设备对接接码平台",
+      "first_seen": "2026-05-10 06:31:08.273963",
+      "last_seen": "2026-05-10 06:31:08.273964"
+    },
+    "f5924db73641426b83ab840359812f85": {
+      "id": "f5924db73641426b83ab840359812f85",
+      "source_entity_id": "40556ee89d914713bea34ff5fa619a41",
+      "target_entity_id": "d47d5eecb3e6423ca8cf251f597a9116",
+      "type": "uses",
+      "confidence": 0.87,
+      "evidence": "四件套贩卖使用BTC收款",
+      "first_seen": "2026-05-10 06:31:08.274037",
+      "last_seen": "2026-05-10 06:31:08.274038"
+    },
+    "4a981557d73945268e4ba7de212513e7": {
+      "id": "4a981557d73945268e4ba7de212513e7",
+      "source_entity_id": "11c27c8afa4a4669b46b1bf3a99c6dd0",
+      "target_entity_id": "2a0a71d512e6411fb4ccd078994f87e5",
+      "type": "operates",
+      "confidence": 0.77,
+      "evidence": "盘总运营跑分平台",
+      "first_seen": "2026-05-10 06:31:08.274108",
+      "last_seen": "2026-05-10 06:31:08.274110"
+    },
+    "6bbbbe8b9eca469a9d5fbb1eae3dc5cd": {
+      "id": "6bbbbe8b9eca469a9d5fbb1eae3dc5cd",
+      "source_entity_id": "3d2d92b591584615ae260483d1ecb1a3",
+      "target_entity_id": "2a0a71d512e6411fb4ccd078994f87e5",
+      "type": "associated_with",
+      "confidence": 0.8,
+      "evidence": "水房老板与跑分平台合作洗钱",
+      "first_seen": "2026-05-10 06:31:08.274182",
+      "last_seen": "2026-05-10 06:31:08.274183"
+    },
+    "d8d581040652425a925a255aae963bf4": {
+      "id": "d8d581040652425a925a255aae963bf4",
+      "source_entity_id": "e5f36035a980424eb70d7bd82fea8e96",
+      "target_entity_id": "75d1fe42bbe6425da7ca3b43a8592b7b",
+      "type": "located_in",
+      "confidence": 0.83,
+      "evidence": "RAT远控木马部署在暗网服务器",
+      "first_seen": "2026-05-10 06:31:08.274252",
+      "last_seen": "2026-05-10 06:31:08.274254"
+    },
+    "934727b4c34d45129b53cf35a8745034": {
+      "id": "934727b4c34d45129b53cf35a8745034",
+      "source_entity_id": "0ceabff8e7c740d98d57db7996e6f4e2",
+      "target_entity_id": "75d1fe42bbe6425da7ca3b43a8592b7b",
+      "type": "associated_with",
+      "confidence": 0.84,
+      "evidence": "钓鱼工具包在暗网市场出售",
+      "first_seen": "2026-05-10 06:31:08.274317",
+      "last_seen": "2026-05-10 06:31:08.274318"
+    },
+    "ab2e6ce21d8d4bebafa3b11fed46a9a0": {
+      "id": "ab2e6ce21d8d4bebafa3b11fed46a9a0",
+      "source_entity_id": "b5f2813eaf72447c8ba98393fdef2df5",
+      "target_entity_id": "b6543943ff1e49c3ae13317f7c441cb3",
+      "type": "uses",
+      "confidence": 0.73,
+      "evidence": "菠菜平台使用蜘蛛池做SEO",
+      "first_seen": "2026-05-10 06:31:08.274383",
+      "last_seen": "2026-05-10 06:31:08.274385"
+    },
+    "8e2719e3af90483aba85fe63a85c04a9": {
+      "id": "8e2719e3af90483aba85fe63a85c04a9",
+      "source_entity_id": "7ded9f0d7bcd4f3fbca5c68368a342b3",
+      "target_entity_id": "ab26c1abac214d9a8b04bfdc33c729af",
+      "type": "uses",
+      "confidence": 0.91,
+      "evidence": "撞库工具需要养号服务提供账号",
+      "first_seen": "2026-05-10 06:31:08.274453",
+      "last_seen": "2026-05-10 06:31:08.274454"
+    },
+    "6427af4ca4a64e99b7a34dc72232b91a": {
+      "id": "6427af4ca4a64e99b7a34dc72232b91a",
+      "source_entity_id": "c93d78a7df9d497fb460a6144f9c321f",
+      "target_entity_id": "6bea547384af4e41ba755f5757067ec4",
+      "type": "uses",
+      "confidence": 0.88,
+      "evidence": "AI换脸工具配合接码平台绕过认证",
+      "first_seen": "2026-05-10 06:31:08.274518",
+      "last_seen": "2026-05-10 06:31:08.274520"
+    },
+    "eadf79092ef7414686a72871198578e3": {
+      "id": "eadf79092ef7414686a72871198578e3",
+      "source_entity_id": "f6585982daa3403fa4f3642483b02811",
+      "target_entity_id": "3d2d92b591584615ae260483d1ecb1a3",
+      "type": "associated_with",
+      "confidence": 0.8,
+      "evidence": "资金盘与洗钱通道关联",
+      "first_seen": "2026-05-10 06:31:08.274580",
+      "last_seen": "2026-05-10 06:31:08.274582"
+    },
+    "587c2d8dcbfe4281a1698c25bc895a87": {
+      "id": "587c2d8dcbfe4281a1698c25bc895a87",
+      "source_entity_id": "ef16e72378fe4bf8aeda2f4a59f38887",
+      "target_entity_id": "e0a56f9855114fb99da550034a511a9d",
+      "type": "located_in",
+      "confidence": 0.83,
+      "evidence": "DDoS服务使用暗网服务器",
+      "first_seen": "2026-05-10 06:31:08.274647",
+      "last_seen": "2026-05-10 06:31:08.274648"
+    },
+    "99a10c7d9cf64f2d8a268344bb31bdf3": {
+      "id": "99a10c7d9cf64f2d8a268344bb31bdf3",
+      "source_entity_id": "2a0a71d512e6411fb4ccd078994f87e5",
+      "target_entity_id": "3d2d92b591584615ae260483d1ecb1a3",
+      "type": "uses",
+      "confidence": 0.71,
+      "evidence": "跑分平台使用水房通道洗钱",
+      "first_seen": "2026-05-10 06:31:08.274714",
+      "last_seen": "2026-05-10 06:31:08.274715"
+    },
+    "975d297dcaee4f3bb881afda7ceda877": {
+      "id": "975d297dcaee4f3bb881afda7ceda877",
+      "source_entity_id": "272c6079ae9143e6a48fd3bd2d3c89c9",
+      "target_entity_id": "40556ee89d914713bea34ff5fa619a41",
+      "type": "communicates_with",
+      "confidence": 0.85,
+      "evidence": "两个Telegram账号在群组中互动",
+      "first_seen": "2026-05-10 06:31:08.274775",
+      "last_seen": "2026-05-10 06:31:08.274777"
     }
   },
   "nodes": {
@@ -493,6 +1614,372 @@
       "value": "XX资金盘",
       "confidence": 0.8,
       "context": "疑似庞氏骗局平台"
+    },
+    "0ed081803cfc4dee9860a329deeb7e26": {
+      "type": "organization",
+      "value": "XX跑分平台",
+      "confidence": 0.85,
+      "context": "Telegram群组中发现的跑分洗钱平台"
+    },
+    "1c1d8e0bddec4acbb7b8e888df9b90fb": {
+      "type": "tool",
+      "value": "猫池设备",
+      "confidence": 0.9,
+      "context": "批量收发短信验证码的设备"
+    },
+    "e460f533a56547b59f9c2cd593307a74": {
+      "type": "tool",
+      "value": "撞库工具",
+      "confidence": 0.88,
+      "context": "批量检测账号密码的工具"
+    },
+    "3067b055404f4804929d683e97f022f3": {
+      "type": "account",
+      "value": "@paofen888",
+      "confidence": 0.95,
+      "context": "跑分平台Telegram联系方式"
+    },
+    "0758dd48e7e3415e8b2c834f9f2c090d": {
+      "type": "account",
+      "value": "@sijiantao_shop",
+      "confidence": 0.92,
+      "context": "四件套贩卖Telegram联系方式"
+    },
+    "209633eff970413b8a041d4a9d5f8929": {
+      "type": "payment_method",
+      "value": "BTC支付",
+      "confidence": 0.8,
+      "context": "暗网交易常用支付方式"
+    },
+    "fee7fba9296644ec9ea6aa06a1daeaa9": {
+      "type": "malware",
+      "value": "RAT远控木马",
+      "confidence": 0.87,
+      "context": "远程控制恶意软件"
+    },
+    "7070ddb833ce4f3cb7d4af2440691dc9": {
+      "type": "service",
+      "value": "接码平台",
+      "confidence": 0.85,
+      "context": "提供手机验证码代收服务"
+    },
+    "b7da8c5c0b2a455092152b4d8d376718": {
+      "type": "service",
+      "value": "DDoS攻击服务",
+      "confidence": 0.82,
+      "context": "按小时收费的DDoS攻击服务"
+    },
+    "313402c377e2472b921ef48b8364254d": {
+      "type": "person",
+      "value": "盘总",
+      "confidence": 0.75,
+      "context": "杀猪盘项目组织者"
+    },
+    "661e81d15e604022936f26be96e1865d": {
+      "type": "person",
+      "value": "水房老板",
+      "confidence": 0.78,
+      "context": "洗钱通道运营者"
+    },
+    "c27a5a1ca88745ca98953b2ce4de6116": {
+      "type": "tool",
+      "value": "钓鱼工具包",
+      "confidence": 0.9,
+      "context": "针对中国银行的钓鱼网站套件"
+    },
+    "d77983e9e4ec48f1b32742c4a2d2048d": {
+      "type": "crypto_wallet",
+      "value": "bc1q...暗网收款地址",
+      "confidence": 0.7,
+      "context": "暗网市场常用BTC收款地址"
+    },
+    "733b3ae9a34947589797ed84b70d867a": {
+      "type": "organization",
+      "value": "XX菠菜平台",
+      "confidence": 0.83,
+      "context": "网络赌博平台"
+    },
+    "45c6811471904fc19b77cf6fb1dff384": {
+      "type": "tool",
+      "value": "蜘蛛池",
+      "confidence": 0.8,
+      "context": "SEO黑帽技术中的链接农场工具"
+    },
+    "11743385102b484aa28aa5d268a97ba3": {
+      "type": "ip",
+      "value": "185.220.101.xxx",
+      "confidence": 0.65,
+      "context": "暗网市场服务器IP"
+    },
+    "8d3079d4118745c6936bc07ef7639f2c": {
+      "type": "domain",
+      "value": "darkmarketx.onion",
+      "confidence": 0.88,
+      "context": "暗网市场域名"
+    },
+    "a320c863a6a44f17b6adea1b8626932f": {
+      "type": "service",
+      "value": "养号服务",
+      "confidence": 0.82,
+      "context": "批量培育社交媒体账号"
+    },
+    "e4ee4d5df4134bdb86bfb459a841c3cd": {
+      "type": "tool",
+      "value": "AI换脸工具",
+      "confidence": 0.85,
+      "context": "用于绕过活体检测的深度伪造工具"
+    },
+    "394a868d9e3f46df84eefab77ab2104b": {
+      "type": "organization",
+      "value": "XX资金盘",
+      "confidence": 0.8,
+      "context": "疑似庞氏骗局平台"
+    },
+    "bc7c9694f18943ca9559dd27e4093ff6": {
+      "type": "organization",
+      "value": "XX跑分平台",
+      "confidence": 0.85,
+      "context": "Telegram群组中发现的跑分洗钱平台"
+    },
+    "840fdd759f0c42558c36534d383732a1": {
+      "type": "tool",
+      "value": "猫池设备",
+      "confidence": 0.9,
+      "context": "批量收发短信验证码的设备"
+    },
+    "cb78e3a76e39481caa141008106ed351": {
+      "type": "tool",
+      "value": "撞库工具",
+      "confidence": 0.88,
+      "context": "批量检测账号密码的工具"
+    },
+    "d48e0d8e04994ee1846d9f7f1395322b": {
+      "type": "account",
+      "value": "@paofen888",
+      "confidence": 0.95,
+      "context": "跑分平台Telegram联系方式"
+    },
+    "e3c0bcde2eaa40dbaf41c8c2f08dbe2a": {
+      "type": "account",
+      "value": "@sijiantao_shop",
+      "confidence": 0.92,
+      "context": "四件套贩卖Telegram联系方式"
+    },
+    "34eec168715144c6876402c1fc434d0d": {
+      "type": "payment_method",
+      "value": "BTC支付",
+      "confidence": 0.8,
+      "context": "暗网交易常用支付方式"
+    },
+    "5893c4c9debf495889759b1129df4bce": {
+      "type": "malware",
+      "value": "RAT远控木马",
+      "confidence": 0.87,
+      "context": "远程控制恶意软件"
+    },
+    "6e20095ccd574b6991383ec68bfa940f": {
+      "type": "service",
+      "value": "接码平台",
+      "confidence": 0.85,
+      "context": "提供手机验证码代收服务"
+    },
+    "05a0536f34de4dd0bbe4b307a7cf134e": {
+      "type": "service",
+      "value": "DDoS攻击服务",
+      "confidence": 0.82,
+      "context": "按小时收费的DDoS攻击服务"
+    },
+    "ac6e2b9b2da1441f912644266ce381a3": {
+      "type": "person",
+      "value": "盘总",
+      "confidence": 0.75,
+      "context": "杀猪盘项目组织者"
+    },
+    "89ade037bd44406d9bf6fc145700c86d": {
+      "type": "person",
+      "value": "水房老板",
+      "confidence": 0.78,
+      "context": "洗钱通道运营者"
+    },
+    "2f51a626cc8946c2b61222a09e67c853": {
+      "type": "tool",
+      "value": "钓鱼工具包",
+      "confidence": 0.9,
+      "context": "针对中国银行的钓鱼网站套件"
+    },
+    "aedd1251740e494587bfa9c5b44a2f2a": {
+      "type": "crypto_wallet",
+      "value": "bc1q...暗网收款地址",
+      "confidence": 0.7,
+      "context": "暗网市场常用BTC收款地址"
+    },
+    "c73f68e5803a4dcf8b22249aee132174": {
+      "type": "organization",
+      "value": "XX菠菜平台",
+      "confidence": 0.83,
+      "context": "网络赌博平台"
+    },
+    "2352102a5a194426a93c68f5417f6052": {
+      "type": "tool",
+      "value": "蜘蛛池",
+      "confidence": 0.8,
+      "context": "SEO黑帽技术中的链接农场工具"
+    },
+    "71a2fd4a31e041e1aa840b89f7d7531c": {
+      "type": "ip",
+      "value": "185.220.101.xxx",
+      "confidence": 0.65,
+      "context": "暗网市场服务器IP"
+    },
+    "4fb19a989cc041b3b60b819896cd40a3": {
+      "type": "domain",
+      "value": "darkmarketx.onion",
+      "confidence": 0.88,
+      "context": "暗网市场域名"
+    },
+    "9e29c0f38ce84ac98b44efd84a3c0cff": {
+      "type": "service",
+      "value": "养号服务",
+      "confidence": 0.82,
+      "context": "批量培育社交媒体账号"
+    },
+    "d5a8162c521a4924b101162c8339b97a": {
+      "type": "tool",
+      "value": "AI换脸工具",
+      "confidence": 0.85,
+      "context": "用于绕过活体检测的深度伪造工具"
+    },
+    "09c21f6fa4ad40ea926ff0b43418909a": {
+      "type": "organization",
+      "value": "XX资金盘",
+      "confidence": 0.8,
+      "context": "疑似庞氏骗局平台"
+    },
+    "2a0a71d512e6411fb4ccd078994f87e5": {
+      "type": "organization",
+      "value": "XX跑分平台",
+      "confidence": 0.85,
+      "context": "Telegram群组中发现的跑分洗钱平台"
+    },
+    "cb51a1f0ef24469cab76fbe7826b1667": {
+      "type": "tool",
+      "value": "猫池设备",
+      "confidence": 0.9,
+      "context": "批量收发短信验证码的设备"
+    },
+    "7ded9f0d7bcd4f3fbca5c68368a342b3": {
+      "type": "tool",
+      "value": "撞库工具",
+      "confidence": 0.88,
+      "context": "批量检测账号密码的工具"
+    },
+    "272c6079ae9143e6a48fd3bd2d3c89c9": {
+      "type": "account",
+      "value": "@paofen888",
+      "confidence": 0.95,
+      "context": "跑分平台Telegram联系方式"
+    },
+    "40556ee89d914713bea34ff5fa619a41": {
+      "type": "account",
+      "value": "@sijiantao_shop",
+      "confidence": 0.92,
+      "context": "四件套贩卖Telegram联系方式"
+    },
+    "d47d5eecb3e6423ca8cf251f597a9116": {
+      "type": "payment_method",
+      "value": "BTC支付",
+      "confidence": 0.8,
+      "context": "暗网交易常用支付方式"
+    },
+    "e5f36035a980424eb70d7bd82fea8e96": {
+      "type": "malware",
+      "value": "RAT远控木马",
+      "confidence": 0.87,
+      "context": "远程控制恶意软件"
+    },
+    "6bea547384af4e41ba755f5757067ec4": {
+      "type": "service",
+      "value": "接码平台",
+      "confidence": 0.85,
+      "context": "提供手机验证码代收服务"
+    },
+    "ef16e72378fe4bf8aeda2f4a59f38887": {
+      "type": "service",
+      "value": "DDoS攻击服务",
+      "confidence": 0.82,
+      "context": "按小时收费的DDoS攻击服务"
+    },
+    "11c27c8afa4a4669b46b1bf3a99c6dd0": {
+      "type": "person",
+      "value": "盘总",
+      "confidence": 0.75,
+      "context": "杀猪盘项目组织者"
+    },
+    "3d2d92b591584615ae260483d1ecb1a3": {
+      "type": "person",
+      "value": "水房老板",
+      "confidence": 0.78,
+      "context": "洗钱通道运营者"
+    },
+    "0ceabff8e7c740d98d57db7996e6f4e2": {
+      "type": "tool",
+      "value": "钓鱼工具包",
+      "confidence": 0.9,
+      "context": "针对中国银行的钓鱼网站套件"
+    },
+    "d19fe9c4d2804158a569bfed0cf2e4d7": {
+      "type": "crypto_wallet",
+      "value": "bc1q...暗网收款地址",
+      "confidence": 0.7,
+      "context": "暗网市场常用BTC收款地址"
+    },
+    "b5f2813eaf72447c8ba98393fdef2df5": {
+      "type": "organization",
+      "value": "XX菠菜平台",
+      "confidence": 0.83,
+      "context": "网络赌博平台"
+    },
+    "b6543943ff1e49c3ae13317f7c441cb3": {
+      "type": "tool",
+      "value": "蜘蛛池",
+      "confidence": 0.8,
+      "context": "SEO黑帽技术中的链接农场工具"
+    },
+    "e0a56f9855114fb99da550034a511a9d": {
+      "type": "ip",
+      "value": "185.220.101.xxx",
+      "confidence": 0.65,
+      "context": "暗网市场服务器IP"
+    },
+    "75d1fe42bbe6425da7ca3b43a8592b7b": {
+      "type": "domain",
+      "value": "darkmarketx.onion",
+      "confidence": 0.88,
+      "context": "暗网市场域名"
+    },
+    "ab26c1abac214d9a8b04bfdc33c729af": {
+      "type": "service",
+      "value": "养号服务",
+      "confidence": 0.82,
+      "context": "批量培育社交媒体账号"
+    },
+    "c93d78a7df9d497fb460a6144f9c321f": {
+      "type": "tool",
+      "value": "AI换脸工具",
+      "confidence": 0.85,
+      "context": "用于绕过活体检测的深度伪造工具"
+    },
+    "f6585982daa3403fa4f3642483b02811": {
+      "type": "organization",
+      "value": "XX资金盘",
+      "confidence": 0.8,
+      "context": "疑似庞氏骗局平台"
+    },
+    "26b012eb25674ffeb9461d7f49dfb65f": {
+      "type": "ip",
+      "value": "1.2.3.4",
+      "confidence": 0.5,
+      "context": "t"
     }
   },
   "edges": [
@@ -615,10 +2102,370 @@
       "type": "associated_with",
       "confidence": 0.7,
       "evidence": "资金盘与洗钱通道关联"
+    },
+    {
+      "source": "0ed081803cfc4dee9860a329deeb7e26",
+      "target": "1c1d8e0bddec4acbb7b8e888df9b90fb",
+      "id": "cc06caa27f6c49c3bca563c22c58db88",
+      "type": "uses",
+      "confidence": 0.78,
+      "evidence": "跑分平台使用猫池设备接收验证码"
+    },
+    {
+      "source": "0ed081803cfc4dee9860a329deeb7e26",
+      "target": "3067b055404f4804929d683e97f022f3",
+      "id": "f2f705ced80343cda68ec17441bbf309",
+      "type": "controls",
+      "confidence": 0.94,
+      "evidence": "跑分平台通过此Telegram账号联系"
+    },
+    {
+      "source": "0ed081803cfc4dee9860a329deeb7e26",
+      "target": "661e81d15e604022936f26be96e1865d",
+      "id": "df89ebaa1d2244b289149cb9dec5f2cd",
+      "type": "uses",
+      "confidence": 0.73,
+      "evidence": "跑分平台使用水房通道洗钱"
+    },
+    {
+      "source": "1c1d8e0bddec4acbb7b8e888df9b90fb",
+      "target": "7070ddb833ce4f3cb7d4af2440691dc9",
+      "id": "9c3acafeaa7d45738fffda56e945a9ab",
+      "type": "uses",
+      "confidence": 0.78,
+      "evidence": "猫池设备对接接码平台"
+    },
+    {
+      "source": "e460f533a56547b59f9c2cd593307a74",
+      "target": "a320c863a6a44f17b6adea1b8626932f",
+      "id": "cd5eec84bb6e40c89bcd08beb1498a54",
+      "type": "uses",
+      "confidence": 0.87,
+      "evidence": "撞库工具需要养号服务提供账号"
+    },
+    {
+      "source": "3067b055404f4804929d683e97f022f3",
+      "target": "0758dd48e7e3415e8b2c834f9f2c090d",
+      "id": "51e4c9d22e9d4a118da6a4a57606f42e",
+      "type": "communicates_with",
+      "confidence": 0.77,
+      "evidence": "两个Telegram账号在群组中互动"
+    },
+    {
+      "source": "0758dd48e7e3415e8b2c834f9f2c090d",
+      "target": "209633eff970413b8a041d4a9d5f8929",
+      "id": "1c58a233a0c94b0ea0ac6709016e9c28",
+      "type": "uses",
+      "confidence": 0.86,
+      "evidence": "四件套贩卖使用BTC收款"
+    },
+    {
+      "source": "fee7fba9296644ec9ea6aa06a1daeaa9",
+      "target": "8d3079d4118745c6936bc07ef7639f2c",
+      "id": "f924e2f7ab344767addc81e4d40a7e9d",
+      "type": "located_in",
+      "confidence": 0.76,
+      "evidence": "RAT远控木马部署在暗网服务器"
+    },
+    {
+      "source": "b7da8c5c0b2a455092152b4d8d376718",
+      "target": "11743385102b484aa28aa5d268a97ba3",
+      "id": "fb92aaabbe3543e2b0725ad4895b1ee5",
+      "type": "located_in",
+      "confidence": 0.75,
+      "evidence": "DDoS服务使用暗网服务器"
+    },
+    {
+      "source": "313402c377e2472b921ef48b8364254d",
+      "target": "0ed081803cfc4dee9860a329deeb7e26",
+      "id": "1cdfdef2e2684560a811a0b90a1383b0",
+      "type": "operates",
+      "confidence": 0.79,
+      "evidence": "盘总运营跑分平台"
+    },
+    {
+      "source": "661e81d15e604022936f26be96e1865d",
+      "target": "0ed081803cfc4dee9860a329deeb7e26",
+      "id": "cd51af7e41f34fab9fd2188b85be2bef",
+      "type": "associated_with",
+      "confidence": 0.71,
+      "evidence": "水房老板与跑分平台合作洗钱"
+    },
+    {
+      "source": "c27a5a1ca88745ca98953b2ce4de6116",
+      "target": "8d3079d4118745c6936bc07ef7639f2c",
+      "id": "2afda9d98b2e469ca2fce55e3fb565c3",
+      "type": "associated_with",
+      "confidence": 0.77,
+      "evidence": "钓鱼工具包在暗网市场出售"
+    },
+    {
+      "source": "733b3ae9a34947589797ed84b70d867a",
+      "target": "45c6811471904fc19b77cf6fb1dff384",
+      "id": "a1111c494ccd4a44ad534a6ba6cfb933",
+      "type": "uses",
+      "confidence": 0.73,
+      "evidence": "菠菜平台使用蜘蛛池做SEO"
+    },
+    {
+      "source": "e4ee4d5df4134bdb86bfb459a841c3cd",
+      "target": "7070ddb833ce4f3cb7d4af2440691dc9",
+      "id": "8e24dcb625ee4bcf8da40793bd705af7",
+      "type": "uses",
+      "confidence": 0.91,
+      "evidence": "AI换脸工具配合接码平台绕过认证"
+    },
+    {
+      "source": "394a868d9e3f46df84eefab77ab2104b",
+      "target": "661e81d15e604022936f26be96e1865d",
+      "id": "5031b4ada91b4bb18bfa2af7b36b5c9d",
+      "type": "associated_with",
+      "confidence": 0.89,
+      "evidence": "资金盘与洗钱通道关联"
+    },
+    {
+      "source": "bc7c9694f18943ca9559dd27e4093ff6",
+      "target": "840fdd759f0c42558c36534d383732a1",
+      "id": "54a8f77b907e4bdaa1e68a0a2162ff46",
+      "type": "uses",
+      "confidence": 0.8,
+      "evidence": "跑分平台使用猫池设备接收验证码"
+    },
+    {
+      "source": "bc7c9694f18943ca9559dd27e4093ff6",
+      "target": "d48e0d8e04994ee1846d9f7f1395322b",
+      "id": "ecd7a20efda14bc589e3a69bbf15da2f",
+      "type": "controls",
+      "confidence": 0.76,
+      "evidence": "跑分平台通过此Telegram账号联系"
+    },
+    {
+      "source": "bc7c9694f18943ca9559dd27e4093ff6",
+      "target": "89ade037bd44406d9bf6fc145700c86d",
+      "id": "165900b813d0438a903b88000ad54559",
+      "type": "uses",
+      "confidence": 0.88,
+      "evidence": "跑分平台使用水房通道洗钱"
+    },
+    {
+      "source": "840fdd759f0c42558c36534d383732a1",
+      "target": "6e20095ccd574b6991383ec68bfa940f",
+      "id": "e0948b6383534bbb87862f29fa2d4db5",
+      "type": "uses",
+      "confidence": 0.91,
+      "evidence": "猫池设备对接接码平台"
+    },
+    {
+      "source": "cb78e3a76e39481caa141008106ed351",
+      "target": "9e29c0f38ce84ac98b44efd84a3c0cff",
+      "id": "aa4773b4d4c74bec93b46ea5a0c6a01e",
+      "type": "uses",
+      "confidence": 0.83,
+      "evidence": "撞库工具需要养号服务提供账号"
+    },
+    {
+      "source": "d48e0d8e04994ee1846d9f7f1395322b",
+      "target": "e3c0bcde2eaa40dbaf41c8c2f08dbe2a",
+      "id": "62597ae22b954e4aa41eafcf318f856e",
+      "type": "communicates_with",
+      "confidence": 0.91,
+      "evidence": "两个Telegram账号在群组中互动"
+    },
+    {
+      "source": "e3c0bcde2eaa40dbaf41c8c2f08dbe2a",
+      "target": "34eec168715144c6876402c1fc434d0d",
+      "id": "1d74cc36bb5e4f94a938a3a7df2a7913",
+      "type": "uses",
+      "confidence": 0.84,
+      "evidence": "四件套贩卖使用BTC收款"
+    },
+    {
+      "source": "5893c4c9debf495889759b1129df4bce",
+      "target": "4fb19a989cc041b3b60b819896cd40a3",
+      "id": "4878b81152254bbcbfa4d66177231b54",
+      "type": "located_in",
+      "confidence": 0.89,
+      "evidence": "RAT远控木马部署在暗网服务器"
+    },
+    {
+      "source": "05a0536f34de4dd0bbe4b307a7cf134e",
+      "target": "71a2fd4a31e041e1aa840b89f7d7531c",
+      "id": "92c32113db9948f789f0a963123575ee",
+      "type": "located_in",
+      "confidence": 0.82,
+      "evidence": "DDoS服务使用暗网服务器"
+    },
+    {
+      "source": "ac6e2b9b2da1441f912644266ce381a3",
+      "target": "bc7c9694f18943ca9559dd27e4093ff6",
+      "id": "a567916d959e4b1ea51c4ed09b192bc5",
+      "type": "operates",
+      "confidence": 0.81,
+      "evidence": "盘总运营跑分平台"
+    },
+    {
+      "source": "89ade037bd44406d9bf6fc145700c86d",
+      "target": "bc7c9694f18943ca9559dd27e4093ff6",
+      "id": "cb2aa35fcd0b4a44bad4ea5b822fb382",
+      "type": "associated_with",
+      "confidence": 0.85,
+      "evidence": "水房老板与跑分平台合作洗钱"
+    },
+    {
+      "source": "2f51a626cc8946c2b61222a09e67c853",
+      "target": "4fb19a989cc041b3b60b819896cd40a3",
+      "id": "67e09fecf8394fcea4147407c17b9d17",
+      "type": "associated_with",
+      "confidence": 0.83,
+      "evidence": "钓鱼工具包在暗网市场出售"
+    },
+    {
+      "source": "c73f68e5803a4dcf8b22249aee132174",
+      "target": "2352102a5a194426a93c68f5417f6052",
+      "id": "a4476b5ce4424d4689a5931001f310da",
+      "type": "uses",
+      "confidence": 0.76,
+      "evidence": "菠菜平台使用蜘蛛池做SEO"
+    },
+    {
+      "source": "d5a8162c521a4924b101162c8339b97a",
+      "target": "6e20095ccd574b6991383ec68bfa940f",
+      "id": "1deaf1a91ee04b2b80a02b4fe2ef10b2",
+      "type": "uses",
+      "confidence": 0.72,
+      "evidence": "AI换脸工具配合接码平台绕过认证"
+    },
+    {
+      "source": "09c21f6fa4ad40ea926ff0b43418909a",
+      "target": "89ade037bd44406d9bf6fc145700c86d",
+      "id": "72ab5e213396413ea184e7e9b2ca9c5f",
+      "type": "associated_with",
+      "confidence": 0.82,
+      "evidence": "资金盘与洗钱通道关联"
+    },
+    {
+      "source": "2a0a71d512e6411fb4ccd078994f87e5",
+      "target": "cb51a1f0ef24469cab76fbe7826b1667",
+      "id": "545f9f6d2f0e4de6ad230ed12608e025",
+      "type": "uses",
+      "confidence": 0.93,
+      "evidence": "跑分平台使用猫池设备接收验证码"
+    },
+    {
+      "source": "2a0a71d512e6411fb4ccd078994f87e5",
+      "target": "272c6079ae9143e6a48fd3bd2d3c89c9",
+      "id": "66d381e446d8457295e5cdb91dcaf74f",
+      "type": "controls",
+      "confidence": 0.82,
+      "evidence": "跑分平台通过此Telegram账号联系"
+    },
+    {
+      "source": "2a0a71d512e6411fb4ccd078994f87e5",
+      "target": "3d2d92b591584615ae260483d1ecb1a3",
+      "id": "99a10c7d9cf64f2d8a268344bb31bdf3",
+      "type": "uses",
+      "confidence": 0.71,
+      "evidence": "跑分平台使用水房通道洗钱"
+    },
+    {
+      "source": "cb51a1f0ef24469cab76fbe7826b1667",
+      "target": "6bea547384af4e41ba755f5757067ec4",
+      "id": "94e1e4c68659435db4aa3c3e80f9de8e",
+      "type": "uses",
+      "confidence": 0.78,
+      "evidence": "猫池设备对接接码平台"
+    },
+    {
+      "source": "7ded9f0d7bcd4f3fbca5c68368a342b3",
+      "target": "ab26c1abac214d9a8b04bfdc33c729af",
+      "id": "8e2719e3af90483aba85fe63a85c04a9",
+      "type": "uses",
+      "confidence": 0.91,
+      "evidence": "撞库工具需要养号服务提供账号"
+    },
+    {
+      "source": "272c6079ae9143e6a48fd3bd2d3c89c9",
+      "target": "40556ee89d914713bea34ff5fa619a41",
+      "id": "975d297dcaee4f3bb881afda7ceda877",
+      "type": "communicates_with",
+      "confidence": 0.85,
+      "evidence": "两个Telegram账号在群组中互动"
+    },
+    {
+      "source": "40556ee89d914713bea34ff5fa619a41",
+      "target": "d47d5eecb3e6423ca8cf251f597a9116",
+      "id": "f5924db73641426b83ab840359812f85",
+      "type": "uses",
+      "confidence": 0.87,
+      "evidence": "四件套贩卖使用BTC收款"
+    },
+    {
+      "source": "e5f36035a980424eb70d7bd82fea8e96",
+      "target": "75d1fe42bbe6425da7ca3b43a8592b7b",
+      "id": "d8d581040652425a925a255aae963bf4",
+      "type": "located_in",
+      "confidence": 0.83,
+      "evidence": "RAT远控木马部署在暗网服务器"
+    },
+    {
+      "source": "ef16e72378fe4bf8aeda2f4a59f38887",
+      "target": "e0a56f9855114fb99da550034a511a9d",
+      "id": "587c2d8dcbfe4281a1698c25bc895a87",
+      "type": "located_in",
+      "confidence": 0.83,
+      "evidence": "DDoS服务使用暗网服务器"
+    },
+    {
+      "source": "11c27c8afa4a4669b46b1bf3a99c6dd0",
+      "target": "2a0a71d512e6411fb4ccd078994f87e5",
+      "id": "4a981557d73945268e4ba7de212513e7",
+      "type": "operates",
+      "confidence": 0.77,
+      "evidence": "盘总运营跑分平台"
+    },
+    {
+      "source": "3d2d92b591584615ae260483d1ecb1a3",
+      "target": "2a0a71d512e6411fb4ccd078994f87e5",
+      "id": "6bbbbe8b9eca469a9d5fbb1eae3dc5cd",
+      "type": "associated_with",
+      "confidence": 0.8,
+      "evidence": "水房老板与跑分平台合作洗钱"
+    },
+    {
+      "source": "0ceabff8e7c740d98d57db7996e6f4e2",
+      "target": "75d1fe42bbe6425da7ca3b43a8592b7b",
+      "id": "934727b4c34d45129b53cf35a8745034",
+      "type": "associated_with",
+      "confidence": 0.84,
+      "evidence": "钓鱼工具包在暗网市场出售"
+    },
+    {
+      "source": "b5f2813eaf72447c8ba98393fdef2df5",
+      "target": "b6543943ff1e49c3ae13317f7c441cb3",
+      "id": "ab2e6ce21d8d4bebafa3b11fed46a9a0",
+      "type": "uses",
+      "confidence": 0.73,
+      "evidence": "菠菜平台使用蜘蛛池做SEO"
+    },
+    {
+      "source": "c93d78a7df9d497fb460a6144f9c321f",
+      "target": "6bea547384af4e41ba755f5757067ec4",
+      "id": "6427af4ca4a64e99b7a34dc72232b91a",
+      "type": "uses",
+      "confidence": 0.88,
+      "evidence": "AI换脸工具配合接码平台绕过认证"
+    },
+    {
+      "source": "f6585982daa3403fa4f3642483b02811",
+      "target": "3d2d92b591584615ae260483d1ecb1a3",
+      "id": "eadf79092ef7414686a72871198578e3",
+      "type": "associated_with",
+      "confidence": 0.8,
+      "evidence": "资金盘与洗钱通道关联"
     }
   ],
   "statistics": {
-    "node_count": 20,
-    "edge_count": 15
+    "node_count": 81,
+    "edge_count": 60
   }
 }

@@ -246,7 +246,6 @@ const GraphCanvas: React.FC<GraphCanvasProps> = ({
         entity_type: entityType,
         confidence: node.confidence,
         properties: node.properties,
-        community: node.community,
         type: 'circle',
         size: Math.max(30, Math.min(60, 30 + (node.properties ? Object.keys(node.properties).length * 3 : 0))),
         style: {

@@ -1,16 +1,9 @@
-export type Role = 'admin' | 'analyst' | 'viewer';
-
 export interface User {
   id: string;
   username: string;
-  role: Role;
+  role: 'admin' | 'analyst' | 'viewer';
   is_active: boolean;
   created_at: string;
-}
-
-export interface LoginRequest {
-  username: string;
-  password: string;
 }
 
 export interface LoginResponse {
@@ -19,109 +12,137 @@ export interface LoginResponse {
   user: User;
 }
 
-export interface RegisterRequest {
-  username: string;
-  password: string;
-  role: Role;
-}
-
-export interface ChangePasswordRequest {
-  current_password: string;
-  new_password: string;
-}
-
-export interface TokenPayload {
-  sub: string;
-  username: string;
-  role: Role;
-  exp: number;
-  iat: number;
-}
-
-export type TaskStatusType = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-export interface Task {
-  id: string;
-  type: string;
-  status: TaskStatusType;
-  params: Record<string, unknown>;
-  result: unknown | null;
-  error: string | null;
-  progress: number;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-}
-
-export interface TaskListResponse {
-  items: Task[];
+export interface PaginatedResponse<T> {
+  items: T[];
   total: number;
   offset: number;
   limit: number;
 }
 
-export interface Intelligence {
+export interface IntelligenceItem {
   id: string;
-  title: string;
+  source?: string | null;
   content: string;
-  source: string;
-  source_type: 'telegram' | 'dark_web' | 'forum' | 'social_media' | 'other';
-  threat_level: 'critical' | 'high' | 'medium' | 'low' | 'info';
-  collected_at: string;
-  processed_at?: string;
-  entities: Entity[];
-  tags: string[];
-  raw_content?: string;
-  decoded_content?: string;
-  is_processed: boolean;
+  threat_level?: string | null;
+  status: string;
+  collected_at?: string | null;
+  entities_count: number;
+  blacktalk_count: number;
+  type: 'raw' | 'cleaned' | 'analyzed';
 }
 
-export interface Entity {
+export interface IntelligenceDetail {
+  type: 'raw' | 'cleaned' | 'analyzed';
+  data: Record<string, unknown>;
+}
+
+export interface IntelligenceStats {
+  by_source: Record<string, number>;
+  by_threat_level: Record<string, number>;
+  by_status: Record<string, number>;
+  total: number;
+}
+
+export interface DashboardStats {
+  total_intelligence: number;
+  active_pirs: number;
+  threat_alerts: number;
+  graph_nodes: number;
+  threat_level_distribution: Record<string, number>;
+  source_type_distribution: Record<string, number>;
+  recent_intelligence: RecentIntelligence[];
+  agent_statuses: AgentStatus[];
+  recent_executions: RecentExecution[];
+}
+
+export interface RecentIntelligence {
   id: string;
+  title?: string;
+  content: string;
+  source?: string | null;
+  source_type?: string;
+  threat_level?: string | null;
+  collected_at?: string | null;
+  is_processed?: boolean;
+  entities?: unknown[];
+  tags?: string[];
+}
+
+export interface AgentStatus {
   name: string;
-  entity_type: 'person' | 'organization' | 'account' | 'phone' | 'website' | 'crypto_wallet' | 'ip' | 'location' | 'tool' | 'other';
-  properties: Record<string, string>;
-  confidence: number;
-  first_seen: string;
-  last_seen: string;
-  mention_count: number;
+  status: string;
+  current_task?: string | null;
+  execution_count?: number;
 }
 
-export interface Relation {
-  id: string;
-  source_id: string;
-  target_id: string;
-  relation_type: string;
-  properties: Record<string, string>;
-  confidence: number;
-  evidence: string[];
-  created_at: string;
-}
-
-export interface PIR {
-  id: string;
-  title: string;
-  description: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  status: 'draft' | 'active' | 'executing' | 'completed' | 'archived';
-  created_at: string;
-  updated_at: string;
-  tasks: PIRTask[];
-  fulfillment_score: number;
-  generated_reports: string[];
-  keywords: string[];
-  target_entities: string[];
-}
-
-export interface PIRTask {
-  id: string;
-  pir_id: string;
-  task_type: string;
-  description: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: string;
-  created_at: string;
+export interface RecentExecution {
+  id?: string;
+  execution_id?: string;
+  query?: string;
+  status?: string;
+  started_at?: string;
   completed_at?: string;
+  start_time?: string;
+  end_time?: string;
+  result_summary?: string | null;
+  results_summary?: string | null;
+  agent_name?: string;
+  duration_seconds?: number;
+  steps?: number;
+  error?: string | null;
+}
+
+export interface BlackTalkTerm {
+  id: string;
+  term: string;
+  meaning: string;
+  context?: string;
+  source?: string;
+  category?: string;
+  confidence?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BlackTalkDecodeResult {
+  original_text: string;
+  decoded_text: string;
+  decoded_terms: unknown[];
+  terms_found: number;
+  auto_learned: unknown[];
+  found_terms: Array<{
+    term: string;
+    meaning: string;
+    position: number[];
+  }>;
+}
+
+export interface BlackTalkStats {
+  total_terms: number;
+  categories: Record<string, number>;
+  sources: Record<string, number>;
+  average_confidence: number;
+}
+
+export interface GraphEntity {
+  id: string;
+  type: string;
+  value: string;
+  context?: string | null;
+  confidence?: number;
+  first_seen?: string;
+  last_seen?: string;
+}
+
+export interface GraphRelation {
+  id: string;
+  source_entity_id: string;
+  target_entity_id: string;
+  type: string;
+  confidence?: number;
+  evidence?: string | null;
+  first_seen?: string;
+  last_seen?: string;
 }
 
 export interface GraphData {
@@ -133,9 +154,8 @@ export interface GraphNode {
   id: string;
   label: string;
   entity_type: string;
-  properties: Record<string, string>;
-  confidence: number;
-  community?: number;
+  properties: Record<string, unknown>;
+  confidence?: number;
 }
 
 export interface GraphEdge {
@@ -143,118 +163,89 @@ export interface GraphEdge {
   source: string;
   target: string;
   relation_type: string;
-  properties: Record<string, string>;
-  confidence: number;
+  properties: Record<string, unknown>;
+  confidence?: number;
 }
 
 export interface GraphStats {
-  total_nodes: number;
-  total_edges: number;
-  entity_type_distribution: Record<string, number>;
-  relation_type_distribution: Record<string, number>;
+  node_count: number;
+  edge_count: number;
+  entity_types: Record<string, number>;
+}
+
+export interface CommunityResult {
+  algorithm: string;
+  communities: Array<{
+    member_count: number;
+    members: Array<{
+      id: string;
+      type: string;
+      value: string;
+    }>;
+  }>;
   community_count: number;
 }
 
-export interface BlackTalkTerm {
-  id: string;
-  term: string;
-  meaning: string;
-  category: string;
-  confidence: number;
-  is_auto_learned: boolean;
-  source: string;
-  created_at: string;
-  usage_count: number;
-  related_terms: string[];
+export interface PathResult {
+  source_id: string;
+  target_id: string;
+  paths: Array<Array<{
+    id: string;
+    type?: string;
+    value?: string;
+  }>>;
+  path_count: number;
+  message?: string;
 }
 
-export interface DecodeResult {
-  original_text: string;
-  decoded_text: string;
-  found_terms: Array<{
-    term: string;
-    meaning: string;
-    position: [number, number];
-  }>;
+export interface PIR {
+  id: string;
+  title: string;
+  description: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  status: 'draft' | 'active' | 'executing' | 'fulfilled' | 'archived';
+  keywords: string[];
+  target_sources: string[];
+  target_entities: unknown[];
+  tasks: PIRTask[];
+  fulfillment_score: number;
+  generated_reports: unknown[];
+  created_at?: string;
+  updated_at?: string;
+  results_summary?: string;
+}
+
+export interface PIRTask {
+  id: string;
+  pir_id: string;
+  agent_type: string;
+  task_description?: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Report {
   id: string;
   title: string;
-  pir_id: string;
-  status: 'generating' | 'completed' | 'failed';
-  created_at: string;
-  sections: ReportSection[];
-  evidence_chain: EvidenceItem[];
-  summary: string;
+  report_type: string;
+  status: string;
+  content?: string | null;
+  sections?: unknown[];
+  related_intelligence?: unknown[];
+  pir_ids?: string[];
+  intelligence_ids?: string[];
+  task_id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface ReportSection {
-  title: string;
-  content: string;
-  type: 'overview' | 'analysis' | 'evidence' | 'recommendation' | 'appendix';
-}
-
-export interface EvidenceItem {
-  id: string;
-  description: string;
-  source: string;
-  confidence: number;
-  related_entities: string[];
-  timestamp: string;
-}
-
-export interface AgentStatus {
-  name: string;
-  status: 'idle' | 'running' | 'error';
-  current_task?: string;
-  last_execution?: string;
-  execution_count: number;
-}
-
-export interface ExecutionRecord {
-  id: string;
-  query: string;
-  status: 'running' | 'completed' | 'failed';
-  started_at: string;
-  completed_at?: string;
-  result_summary?: string;
-  agent_name: string;
-}
-
-export interface DashboardStats {
-  total_intelligence: number;
-  active_pirs: number;
-  threat_alerts: number;
-  graph_nodes: number;
-  threat_level_distribution: Record<string, number>;
-  source_type_distribution: Record<string, number>;
-  recent_intelligence: Intelligence[];
-  agent_statuses: AgentStatus[];
-  recent_executions: ExecutionRecord[];
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
-export interface SearchParams {
-  query?: string;
-  page?: number;
-  page_size?: number;
-  sort_by?: string;
-  sort_order?: 'asc' | 'desc';
-  filters?: Record<string, string | string[]>;
-}
-
-export interface ApiError {
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-  };
+export interface TaskStatus {
+  task_id: string;
+  status: string;
+  message?: string;
+  execution_id?: string;
+  results?: unknown;
+  results_summary?: string;
 }

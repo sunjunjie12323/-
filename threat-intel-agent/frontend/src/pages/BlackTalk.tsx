@@ -1,136 +1,88 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Row,
-  Col,
-  Card,
-  Input,
-  Select,
-  Button,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  Modal,
-  Form,
-  Tabs,
-  Progress,
-  Statistic,
-  Divider,
-  message,
-  Spin,
-  Empty,
-  Alert,
+  Card, Table, Tag, Input, Button, Space, Modal, Form, message,
+  Empty, Spin, Typography, Tabs, List, Statistic, Row, Col, Alert,
 } from 'antd';
 import {
-  SearchOutlined,
-  PlusOutlined,
-  TranslationOutlined,
-  ReloadOutlined,
-  BulbOutlined,
-  RobotOutlined,
-  BookOutlined,
+  PlusOutlined, SearchOutlined, ReloadOutlined, TranslationOutlined,
+  BookOutlined, BarChartOutlined,
 } from '@ant-design/icons';
-import { blackTalkApi, extractErrorMessage } from '../services/api';
-import type { BlackTalkTerm, DecodeResult } from '../types';
-import dayjs from 'dayjs';
+import { blacktalkApi, getErrorMessage } from '../services/api';
+import type { BlackTalkTerm, BlackTalkDecodeResult, BlackTalkStats, PaginatedResponse } from '../types';
 
-const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
-
-const categoryLabels: Record<string, string> = {
-  fraud: '诈骗',
-  gambling: '赌博',
-  money_laundering: '洗钱',
-  phishing: '钓鱼',
-  malware: '恶意软件',
-  data_theft: '数据窃取',
-  drug: '毒品',
-  other: '其他',
-};
-
-const categoryColors: Record<string, string> = {
-  fraud: '#f5222d',
-  gambling: '#fa8c16',
-  money_laundering: '#722ed1',
-  phishing: '#1890ff',
-  malware: '#eb2f96',
-  data_theft: '#13c2c2',
-  drug: '#52c41a',
-  other: '#8c8c8c',
-};
+const { Text, Paragraph, Title } = Typography;
 
 const BlackTalk: React.FC = () => {
+  const [terms, setTerms] = useState<PaginatedResponse<BlackTalkTerm>>({ items: [], total: 0, offset: 0, limit: 20 });
+  const [stats, setStats] = useState<BlackTalkStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [terms, setTerms] = useState<BlackTalkTerm[]>([]);
-  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
-  const [addVisible, setAddVisible] = useState(false);
-  const [addLoading, setAddLoading] = useState(false);
-  const [decodeText, setDecodeText] = useState('');
-  const [decodeResult, setDecodeResult] = useState<DecodeResult | null>(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [decodeInput, setDecodeInput] = useState('');
+  const [decodeResult, setDecodeResult] = useState<BlackTalkDecodeResult | null>(null);
   const [decoding, setDecoding] = useState(false);
-  const [addForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('dictionary');
+  const [form] = Form.useForm();
 
   const fetchTerms = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const result = await blackTalkApi.getBlackTalkTerms({
-        query: searchQuery || undefined,
-        page,
-        page_size: pageSize,
-        filters: categoryFilter ? { category: categoryFilter } : undefined,
+      setLoading(true);
+      const result = await blacktalkApi.listTerms({
+        search: search || undefined,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
       });
-      setTerms(result.items);
-      setTotal(result.total);
+      setTerms(result);
     } catch (err) {
-      setError(extractErrorMessage(err));
-      setTerms([]);
-      setTotal(0);
+      message.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, categoryFilter, page, pageSize]);
+  }, [search, page, pageSize]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const s = await blacktalkApi.getStats();
+      setStats(s);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     fetchTerms();
   }, [fetchTerms]);
 
-  const handleSearch = () => {
-    setPage(1);
-    fetchTerms();
-  };
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
-  const handleAddTerm = async (values: Record<string, unknown>) => {
-    setAddLoading(true);
+  const handleAddTerm = async (values: { term: string; meaning: string; context?: string; source?: string }) => {
     try {
-      await blackTalkApi.addBlackTalkTerm(values as Partial<BlackTalkTerm>);
+      await blacktalkApi.addTerm(values.term, values.meaning, values.context, values.source);
       message.success('术语添加成功');
+      setAddModalOpen(false);
+      form.resetFields();
+      fetchTerms();
+      fetchStats();
     } catch (err) {
-      message.error(`添加失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     }
-    setAddLoading(false);
-    setAddVisible(false);
-    addForm.resetFields();
-    fetchTerms();
   };
 
   const handleDecode = async () => {
-    if (!decodeText.trim()) {
-      message.warning('请输入要解码的文本');
+    if (!decodeInput.trim()) {
+      message.warning('请输入需要解码的文本');
       return;
     }
-    setDecoding(true);
     try {
-      const result = await blackTalkApi.decodeText(decodeText);
+      setDecoding(true);
+      const result = await blacktalkApi.decode(decodeInput);
       setDecodeResult(result);
     } catch (err) {
-      message.error(`解码失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     } finally {
       setDecoding(false);
     }
@@ -141,372 +93,263 @@ const BlackTalk: React.FC = () => {
       title: '术语',
       dataIndex: 'term',
       key: 'term',
-      width: 100,
-      render: (term: string, record: BlackTalkTerm) => (
-        <Space>
-          <Text strong style={{ fontSize: 14 }}>{term}</Text>
-          {record.is_auto_learned && (
-            <RobotOutlined style={{ color: '#1890ff', fontSize: 12 }} />
-          )}
-        </Space>
-      ),
+      width: 150,
+      render: (term: string) => <Text strong>{term}</Text>,
     },
     {
-      title: '释义',
+      title: '含义',
       dataIndex: 'meaning',
       key: 'meaning',
       ellipsis: true,
-      render: (meaning: string) => (
-        <Text style={{ fontSize: 13 }}>{meaning}</Text>
-      ),
+    },
+    {
+      title: '上下文',
+      dataIndex: 'context',
+      key: 'context',
+      width: 200,
+      ellipsis: true,
+      render: (ctx: string | undefined) => ctx || <Text type="secondary">-</Text>,
+    },
+    {
+      title: '来源',
+      dataIndex: 'source',
+      key: 'source',
+      width: 100,
+      render: (source: string | undefined) => source ? <Tag>{source}</Tag> : <Text type="secondary">-</Text>,
     },
     {
       title: '分类',
       dataIndex: 'category',
       key: 'category',
       width: 100,
-      render: (category: string) => (
-        <Tag color={categoryColors[category] || 'default'}>
-          {categoryLabels[category] || category}
-        </Tag>
-      ),
+      render: (cat: string | undefined) => cat ? <Tag color="blue">{cat}</Tag> : <Text type="secondary">-</Text>,
     },
     {
       title: '置信度',
       dataIndex: 'confidence',
       key: 'confidence',
-      width: 120,
-      render: (confidence: number) => (
-        <Progress
-          percent={Math.round(confidence * 100)}
-          size="small"
-          strokeColor={confidence > 0.8 ? '#52c41a' : confidence > 0.5 ? '#faad14' : '#ff4d4f'}
-        />
+      width: 100,
+      render: (conf: number | undefined) => {
+        if (conf === undefined || conf === null) return <Text type="secondary">-</Text>;
+        const color = conf >= 0.8 ? 'green' : conf >= 0.5 ? 'orange' : 'red';
+        return <Tag color={color}>{(conf * 100).toFixed(0)}%</Tag>;
+      },
+    },
+  ];
+
+  const tabItems = [
+    {
+      key: 'dictionary',
+      label: (
+        <span>
+          <BookOutlined /> 术语词典
+        </span>
+      ),
+      children: (
+        <div>
+          <Card style={{ marginBottom: 16 }}>
+            <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+              <Space wrap>
+                <Input
+                  placeholder="搜索术语..."
+                  prefix={<SearchOutlined />}
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  style={{ width: 250 }}
+                  allowClear
+                />
+                <Button icon={<ReloadOutlined />} onClick={fetchTerms}>刷新</Button>
+              </Space>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
+                添加术语
+              </Button>
+            </Space>
+          </Card>
+
+          {stats && (
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={8}>
+                <Card><Statistic title="术语总数" value={stats.total_terms} /></Card>
+              </Col>
+              <Col span={8}>
+                <Card><Statistic title="分类数" value={Object.keys(stats.categories || {}).length} /></Card>
+              </Col>
+              <Col span={8}>
+                <Card><Statistic title="平均置信度" value={stats.average_confidence} precision={2} suffix="%" /></Card>
+              </Col>
+            </Row>
+          )}
+
+          <Card>
+            <Table
+              columns={columns}
+              dataSource={terms.items}
+              rowKey="id"
+              loading={loading}
+              locale={{ emptyText: <Empty description="暂无黑话术语" /> }}
+              pagination={{
+                current: page,
+                pageSize,
+                total: terms.total,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条`,
+                onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+              }}
+            />
+          </Card>
+        </div>
       ),
     },
     {
-      title: '使用频次',
-      dataIndex: 'usage_count',
-      key: 'usage_count',
-      width: 90,
-      sorter: (a: BlackTalkTerm, b: BlackTalkTerm) => a.usage_count - b.usage_count,
-      render: (count: number) => <Text style={{ fontSize: 12 }}>{count}</Text>,
+      key: 'decode',
+      label: (
+        <span>
+          <TranslationOutlined /> 解码工具
+        </span>
+      ),
+      children: (
+        <div>
+          <Card title="黑话解码" style={{ marginBottom: 16 }}>
+            <Input.TextArea
+              rows={4}
+              placeholder="输入包含黑话的文本..."
+              value={decodeInput}
+              onChange={(e) => setDecodeInput(e.target.value)}
+              style={{ marginBottom: 12 }}
+            />
+            <Button
+              type="primary"
+              icon={<TranslationOutlined />}
+              onClick={handleDecode}
+              loading={decoding}
+              disabled={!decodeInput.trim()}
+            >
+              解码
+            </Button>
+          </Card>
+
+          {decodeResult && (
+            <Card title="解码结果">
+              {decodeResult.terms_found > 0 ? (
+                <div>
+                  <Alert
+                    message={`发现 ${decodeResult.terms_found} 个黑话术语`}
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                  <div style={{ marginBottom: 16 }}>
+                    <Text strong>原始文本: </Text>
+                    <Paragraph>{decodeResult.original_text}</Paragraph>
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <Text strong>解码文本: </Text>
+                    <Paragraph>{decodeResult.decoded_text}</Paragraph>
+                  </div>
+                  {decodeResult.found_terms && decodeResult.found_terms.length > 0 && (
+                    <div>
+                      <Text strong>识别的术语:</Text>
+                      <List
+                        size="small"
+                        dataSource={decodeResult.found_terms}
+                        renderItem={(term) => (
+                          <List.Item>
+                            <Text strong>{term.term}</Text>
+                            <Text type="secondary" style={{ marginLeft: 8 }}>→ {term.meaning}</Text>
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Empty description="未发现已知黑话术语" />
+              )}
+            </Card>
+          )}
+        </div>
+      ),
     },
     {
-      title: '来源',
-      dataIndex: 'source',
-      key: 'source',
-      width: 90,
-      render: (source: string, record: BlackTalkTerm) => (
-        <Tag color={record.is_auto_learned ? 'blue' : 'default'} style={{ fontSize: 11 }}>
-          {source}
-        </Tag>
+      key: 'stats',
+      label: (
+        <span>
+          <BarChartOutlined /> 统计
+        </span>
+      ),
+      children: (
+        <div>
+          {stats ? (
+            <Row gutter={[16, 16]}>
+              <Col span={12}>
+                <Card title="分类分布">
+                  {Object.keys(stats.categories || {}).length === 0 ? (
+                    <Empty description="暂无分类数据" />
+                  ) : (
+                    <List
+                      size="small"
+                      dataSource={Object.entries(stats.categories)}
+                      renderItem={([cat, count]) => (
+                        <List.Item>
+                          <Text>{cat}</Text>
+                          <Tag color="blue">{count}</Tag>
+                        </List.Item>
+                      )}
+                    />
+                  )}
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card title="来源分布">
+                  {Object.keys(stats.sources || {}).length === 0 ? (
+                    <Empty description="暂无来源数据" />
+                  ) : (
+                    <List
+                      size="small"
+                      dataSource={Object.entries(stats.sources)}
+                      renderItem={([source, count]) => (
+                        <List.Item>
+                          <Text>{source}</Text>
+                          <Tag color="green">{count}</Tag>
+                        </List.Item>
+                      )}
+                    />
+                  )}
+                </Card>
+              </Col>
+            </Row>
+          ) : (
+            <Empty description="暂无统计数据" />
+          )}
+        </div>
       ),
     },
   ];
 
-  const categoryCountMap = terms.reduce<Record<string, number>>((acc, term) => {
-    acc[term.category] = (acc[term.category] || 0) + 1;
-    return acc;
-  }, {});
-
-  const autoLearnedCount = terms.filter((t) => t.is_auto_learned).length;
-  const avgConfidence = terms.length > 0
-    ? terms.reduce((sum, t) => sum + t.confidence, 0) / terms.length
-    : 0;
-
   return (
     <div>
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          {
-            key: 'dictionary',
-            label: (
-              <Space>
-                <BookOutlined />
-                术语词典
-              </Space>
-            ),
-            children: (
-              <div>
-                {error && (
-                  <Alert
-                    message="数据加载失败"
-                    description={error}
-                    type="error"
-                    showIcon
-                    closable
-                    style={{ marginBottom: 16 }}
-                    action={
-                      <Button size="small" onClick={fetchTerms}>
-                        重试
-                      </Button>
-                    }
-                  />
-                )}
-
-                <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-                  <Col span={6}>
-                    <Card size="small" style={{ borderRadius: 8 }}>
-                      <Statistic title="术语总量" value={total} prefix={<BookOutlined />} valueStyle={{ color: '#1890ff' }} />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card size="small" style={{ borderRadius: 8 }}>
-                      <Statistic title="自动学习" value={autoLearnedCount} prefix={<RobotOutlined />} valueStyle={{ color: '#722ed1' }} />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card size="small" style={{ borderRadius: 8 }}>
-                      <Statistic title="分类数" value={Object.keys(categoryCountMap).length} prefix={<BulbOutlined />} valueStyle={{ color: '#fa8c16' }} />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card size="small" style={{ borderRadius: 8 }}>
-                      <Statistic
-                        title="平均置信度"
-                        value={Math.round(avgConfidence * 100)}
-                        suffix="%"
-                        prefix={<TranslationOutlined />}
-                        valueStyle={{ color: '#52c41a' }}
-                      />
-                    </Card>
-                  </Col>
-                </Row>
-
-                <Card style={{ borderRadius: 8, marginBottom: 16 }} styles={{ body: { padding: '12px 20px' } }}>
-                  <Space wrap size="middle">
-                    <Input.Search
-                      placeholder="搜索黑话术语..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onSearch={handleSearch}
-                      style={{ width: 300 }}
-                      allowClear
-                      enterButton={<SearchOutlined />}
-                    />
-                    <Select
-                      placeholder="分类过滤"
-                      value={categoryFilter}
-                      onChange={(val) => { setCategoryFilter(val); setPage(1); }}
-                      options={Object.entries(categoryLabels).map(([value, label]) => ({
-                        label,
-                        value,
-                      }))}
-                      allowClear
-                      style={{ width: 140 }}
-                    />
-                    <Button icon={<ReloadOutlined />} onClick={fetchTerms}>刷新</Button>
-                    <Button icon={<PlusOutlined />} onClick={() => setAddVisible(true)}>添加术语</Button>
-                    <Button
-                      type="primary"
-                      icon={<TranslationOutlined />}
-                      onClick={() => setActiveTab('decode')}
-                    >
-                      解码工具
-                    </Button>
-                  </Space>
-                </Card>
-
-                <Table
-                  columns={columns}
-                  dataSource={terms}
-                  rowKey="id"
-                  loading={loading}
-                  locale={{ emptyText: error ? <Empty description="数据加载失败" /> : <Empty description="暂无术语数据" /> }}
-                  pagination={{
-                    current: page,
-                    pageSize,
-                    total,
-                    showSizeChanger: true,
-                    showTotal: (t) => `共 ${t} 个术语`,
-                    onChange: (p, ps) => {
-                      setPage(p);
-                      setPageSize(ps);
-                    },
-                  }}
-                />
-              </div>
-            ),
-          },
-          {
-            key: 'decode',
-            label: (
-              <Space>
-                <TranslationOutlined />
-                解码工具
-              </Space>
-            ),
-            children: (
-              <Row gutter={24}>
-                <Col span={12}>
-                  <Card title="输入黑话文本" style={{ borderRadius: 8 }}>
-                    <TextArea
-                      rows={10}
-                      value={decodeText}
-                      onChange={(e) => setDecodeText(e.target.value)}
-                      placeholder="在此粘贴包含黑话的文本，例如：&#10;今天跑分通道已经开了，料子质量不错，水房那边可以洗白，菠菜下分也正常。"
-                      style={{ fontSize: 14 }}
-                    />
-                    <div style={{ marginTop: 12, textAlign: 'right' }}>
-                      <Button
-                        type="primary"
-                        icon={<TranslationOutlined />}
-                        onClick={handleDecode}
-                        loading={decoding}
-                      >
-                        解码
-                      </Button>
-                    </div>
-                  </Card>
-                </Col>
-                <Col span={12}>
-                  <Card title="解码结果" style={{ borderRadius: 8 }}>
-                    {decodeResult ? (
-                      <div>
-                        <div style={{ marginBottom: 16 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>解码后文本</Text>
-                          <Paragraph style={{ background: '#f6ffed', padding: 16, borderRadius: 6, borderLeft: '3px solid #52c41a', marginTop: 8, fontSize: 14 }}>
-                            {decodeResult.decoded_text}
-                          </Paragraph>
-                        </div>
-                        <Divider />
-                        <Text type="secondary" style={{ fontSize: 12 }}>识别到的黑话</Text>
-                        <div style={{ marginTop: 8 }}>
-                          {decodeResult.found_terms.length > 0 ? (
-                            decodeResult.found_terms.map((item, i) => (
-                              <div
-                                key={i}
-                                style={{
-                                  background: '#fafafa',
-                                  padding: '8px 12px',
-                                  borderRadius: 6,
-                                  marginBottom: 8,
-                                  borderLeft: '3px solid #1890ff',
-                                }}
-                              >
-                                <Space>
-                                  <Tag color="red">{item.term}</Tag>
-                                  <Text style={{ fontSize: 13 }}>{item.meaning}</Text>
-                                </Space>
-                              </div>
-                            ))
-                          ) : (
-                            <Empty description="未识别到黑话术语" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <Empty description="请输入文本并点击解码" style={{ marginTop: 60 }} />
-                    )}
-                  </Card>
-                </Col>
-              </Row>
-            ),
-          },
-          {
-            key: 'stats',
-            label: (
-              <Space>
-                <BulbOutlined />
-                统计分析
-              </Space>
-            ),
-            children: (
-              <Row gutter={[16, 16]}>
-                <Col span={12}>
-                  <Card title="分类分布" style={{ borderRadius: 8 }}>
-                    {Object.keys(categoryCountMap).length > 0 ? (
-                      Object.entries(categoryCountMap).map(([category, count]) => (
-                        <div key={category} style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Tag color={categoryColors[category]}>{categoryLabels[category] || category}</Tag>
-                            <Text type="secondary">{count}</Text>
-                          </div>
-                          <Progress
-                            percent={terms.length > 0 ? Math.round((count / terms.length) * 100) : 0}
-                            showInfo={false}
-                            strokeColor={categoryColors[category]}
-                            size="small"
-                          />
-                        </div>
-                      ))
-                    ) : (
-                      <Empty description="暂无统计数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                    )}
-                  </Card>
-                </Col>
-                <Col span={12}>
-                  <Card title="置信度分布" style={{ borderRadius: 8 }}>
-                    {terms.length > 0 ? (
-                      <>
-                        {[
-                          { label: '高置信度 (>80%)', count: terms.filter((t) => t.confidence > 0.8).length, color: '#52c41a' },
-                          { label: '中置信度 (50-80%)', count: terms.filter((t) => t.confidence > 0.5 && t.confidence <= 0.8).length, color: '#faad14' },
-                          { label: '低置信度 (<50%)', count: terms.filter((t) => t.confidence <= 0.5).length, color: '#ff4d4f' },
-                        ].map((item) => (
-                          <div key={item.label} style={{ marginBottom: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 13 }}>{item.label}</Text>
-                              <Text type="secondary">{item.count}</Text>
-                            </div>
-                            <Progress
-                              percent={terms.length > 0 ? Math.round((item.count / terms.length) * 100) : 0}
-                              showInfo={false}
-                              strokeColor={item.color}
-                              size="small"
-                            />
-                          </div>
-                        ))}
-                        <Divider />
-                        <Row gutter={16}>
-                          <Col span={12}>
-                            <Statistic title="人工录入" value={terms.filter((t) => !t.is_auto_learned).length} valueStyle={{ fontSize: 20 }} />
-                          </Col>
-                          <Col span={12}>
-                            <Statistic title="自动学习" value={autoLearnedCount} valueStyle={{ fontSize: 20, color: '#1890ff' }} />
-                          </Col>
-                        </Row>
-                      </>
-                    ) : (
-                      <Empty description="暂无统计数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                    )}
-                  </Card>
-                </Col>
-              </Row>
-            ),
-          },
-        ]}
-      />
+      <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
 
       <Modal
         title="添加黑话术语"
-        open={addVisible}
-        onCancel={() => setAddVisible(false)}
-        onOk={() => addForm.submit()}
-        confirmLoading={addLoading}
-        width={560}
+        open={addModalOpen}
+        onCancel={() => { setAddModalOpen(false); form.resetFields(); }}
+        onOk={() => form.submit()}
+        okText="添加"
+        cancelText="取消"
       >
-        <Form form={addForm} layout="vertical" onFinish={handleAddTerm}>
-          <Form.Item name="term" label="术语" rules={[{ required: true, message: '请输入黑话术语' }]}>
+        <Form form={form} layout="vertical" onFinish={handleAddTerm}>
+          <Form.Item name="term" label="术语" rules={[{ required: true, message: '请输入术语' }]}>
             <Input placeholder="输入黑话术语" />
           </Form.Item>
-          <Form.Item name="meaning" label="释义" rules={[{ required: true, message: '请输入术语释义' }]}>
-            <TextArea rows={3} placeholder="输入术语的详细释义" />
+          <Form.Item name="meaning" label="含义" rules={[{ required: true, message: '请输入含义' }]}>
+            <Input placeholder="输入术语含义" />
           </Form.Item>
-          <Form.Item name="category" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
-            <Select
-              options={Object.entries(categoryLabels).map(([value, label]) => ({
-                label,
-                value,
-              }))}
-              placeholder="选择分类"
-            />
+          <Form.Item name="context" label="上下文">
+            <Input placeholder="可选，使用场景" />
           </Form.Item>
-          <Form.Item name="related_terms" label="相关术语">
-            <Select mode="tags" placeholder="输入相关术语后回车" />
+          <Form.Item name="source" label="来源">
+            <Input placeholder="可选，术语来源" />
           </Form.Item>
         </Form>
       </Modal>

@@ -1,381 +1,281 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Row,
-  Col,
-  Card,
-  List,
-  Tag,
-  Button,
-  Space,
-  Typography,
-  Descriptions,
-  Divider,
-  Timeline,
-  Modal,
-  Select,
-  Spin,
-  Empty,
-  Badge,
-  Tooltip,
-  message,
-  Alert,
+  Card, Table, Tag, Button, Space, Modal, Form, Input, Select, message,
+  Empty, Spin, Typography, Popconfirm, Tooltip,
 } from 'antd';
 import {
-  FileTextOutlined,
-  EyeOutlined,
-  DownloadOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  SyncOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
-  LinkOutlined,
-  SafetyOutlined,
+  PlusOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined,
+  FileTextOutlined, DownloadOutlined,
 } from '@ant-design/icons';
-import { reportApi, pirApi, extractErrorMessage } from '../services/api';
-import type { Report, PIR } from '../types';
-import dayjs from 'dayjs';
+import { reportsApi, getErrorMessage } from '../services/api';
+import type { Report, PaginatedResponse } from '../types';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
-const statusConfig: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
-  generating: { color: 'processing', label: '生成中', icon: <SyncOutlined spin /> },
-  completed: { color: 'success', label: '已完成', icon: <CheckCircleOutlined /> },
-  failed: { color: 'error', label: '生成失败', icon: <CloseCircleOutlined /> },
+const REPORT_TYPE_CONFIG: Record<string, { color: string; label: string }> = {
+  threat_summary: { color: 'red', label: '威胁摘要' },
+  entity_analysis: { color: 'blue', label: '实体分析' },
+  pir_fulfillment: { color: 'green', label: 'PIR完成报告' },
+  trend_analysis: { color: 'purple', label: '趋势分析' },
 };
 
-const sectionTypeLabels: Record<string, string> = {
-  overview: '概述',
-  analysis: '分析',
-  evidence: '证据',
-  recommendation: '建议',
-  appendix: '附录',
-};
-
-const sectionTypeColors: Record<string, string> = {
-  overview: '#1890ff',
-  analysis: '#722ed1',
-  evidence: '#f5222d',
-  recommendation: '#52c41a',
-  appendix: '#8c8c8c',
+const REPORT_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
+  draft: { color: 'default', label: '草稿' },
+  generating: { color: 'processing', label: '生成中' },
+  completed: { color: 'success', label: '已完成' },
+  failed: { color: 'error', label: '生成失败' },
 };
 
 const Reports: React.FC = () => {
+  const [reports, setReports] = useState<PaginatedResponse<Report>>({ items: [], total: 0, offset: 0, limit: 20 });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [reports, setReports] = useState<Report[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [generateModalOpen, setGenerateModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [generateVisible, setGenerateVisible] = useState(false);
-  const [selectedPIRId, setSelectedPIRId] = useState<string>('');
-  const [pirOptions, setPirOptions] = useState<PIR[]>([]);
-  const [pirLoading, setPirLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [form] = Form.useForm();
 
   const fetchReports = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const result = await reportApi.getReports({ page, page_size: 10 });
-      setReports(result.items);
-      setTotal(result.total);
+      setLoading(true);
+      const result = await reportsApi.list({
+        status: statusFilter,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+      });
+      setReports(result);
     } catch (err) {
-      setError(extractErrorMessage(err));
-      setReports([]);
-      setTotal(0);
+      message.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [page]);
-
-  const fetchPIROptions = useCallback(async () => {
-    setPirLoading(true);
-    try {
-      const result = await pirApi.getPIRs({ page: 1, page_size: 50 });
-      setPirOptions(result.items);
-    } catch (err) {
-      message.warning('PIR列表加载失败');
-      setPirOptions([]);
-    } finally {
-      setPirLoading(false);
-    }
-  }, []);
+  }, [statusFilter, page, pageSize]);
 
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
 
-  useEffect(() => {
-    if (generateVisible) {
-      fetchPIROptions();
+  const handleGenerate = async (values: { title: string; report_type?: string }) => {
+    try {
+      await reportsApi.generate({
+        title: values.title,
+        report_type: values.report_type || 'threat_summary',
+      });
+      message.success('报告生成任务已提交');
+      setGenerateModalOpen(false);
+      form.resetFields();
+      fetchReports();
+    } catch (err) {
+      message.error(getErrorMessage(err));
     }
-  }, [generateVisible, fetchPIROptions]);
+  };
 
-  const handleViewDetail = async (report: Report) => {
+  const handleDelete = async (reportId: string) => {
+    try {
+      await reportsApi.delete(reportId);
+      message.success('删除成功');
+      fetchReports();
+    } catch (err) {
+      message.error(getErrorMessage(err));
+    }
+  };
+
+  const handleViewDetail = async (reportId: string) => {
+    setDetailModalOpen(true);
     setDetailLoading(true);
     try {
-      const detail = await reportApi.getReportDetail(report.id);
-      setSelectedReport(detail);
-    } catch (err) {
-      message.warning('报告详情加载失败，显示基本信息');
+      const report = await reportsApi.get(reportId);
       setSelectedReport(report);
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!selectedPIRId) {
-      message.warning('请选择PIR');
-      return;
-    }
-    setGenerating(true);
+  const handleExport = async (reportId: string) => {
     try {
-      await reportApi.generateReport(selectedPIRId);
-      message.success('报告生成任务已创建');
+      const result = await reportsApi.export(reportId);
+      const blob = new Blob([result.content], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${result.title || 'report'}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success('导出成功');
     } catch (err) {
-      message.error(`生成失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     }
-    setGenerating(false);
-    setGenerateVisible(false);
-    setSelectedPIRId('');
-    fetchReports();
   };
 
-  const handleExport = (report: Report) => {
-    const content = JSON.stringify(report, null, 2);
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `report-${report.id}-${dayjs().format('YYYYMMDD')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    message.success('报告已导出');
-  };
+  const columns = [
+    {
+      title: '标题',
+      dataIndex: 'title',
+      key: 'title',
+      ellipsis: true,
+      render: (title: string) => <Text strong>{title}</Text>,
+    },
+    {
+      title: '类型',
+      dataIndex: 'report_type',
+      key: 'report_type',
+      width: 120,
+      render: (type: string) => {
+        const config = REPORT_TYPE_CONFIG[type];
+        return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{type}</Tag>;
+      },
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: string) => {
+        const config = REPORT_STATUS_CONFIG[status];
+        return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{status}</Tag>;
+      },
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 160,
+      render: (time: string | undefined) => time ? new Date(time).toLocaleString('zh-CN') : '-',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      render: (_: unknown, record: Report) => (
+        <Space size="small">
+          <Tooltip title="查看详情">
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record.id)} />
+          </Tooltip>
+          {record.status === 'completed' && (
+            <Tooltip title="导出">
+              <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleExport(record.id)} />
+            </Tooltip>
+          )}
+          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <div>
-      {error && (
-        <Alert
-          message="数据加载失败"
-          description={error}
-          type="error"
-          showIcon
-          closable
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={fetchReports}>
-              重试
-            </Button>
-          }
-        />
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          <Title level={5} style={{ margin: 0 }}>分析报告</Title>
-          <Tag color="blue">{total} 份报告</Tag>
-        </Space>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchReports}>刷新</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateVisible(true)}>
+      <Card style={{ marginBottom: 16 }}>
+        <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space wrap>
+            <Select
+              placeholder="状态筛选"
+              value={statusFilter}
+              onChange={(v) => { setStatusFilter(v); setPage(1); }}
+              options={Object.entries(REPORT_STATUS_CONFIG).map(([value, config]) => ({ value, label: config.label }))}
+              allowClear
+              style={{ width: 130 }}
+            />
+            <Button icon={<ReloadOutlined />} onClick={fetchReports}>刷新</Button>
+          </Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateModalOpen(true)}>
             生成报告
           </Button>
         </Space>
-      </div>
+      </Card>
 
-      <Row gutter={[16, 16]}>
-        <Col span={8}>
-          <Card
-            title="报告列表"
-            style={{ borderRadius: 8 }}
-            styles={{ body: { padding: 0 } }}
-          >
-            <Spin spinning={loading}>
-              {reports.length > 0 ? (
-                <List
-                  dataSource={reports}
-                  renderItem={(report) => {
-                    const config = statusConfig[report.status] || statusConfig.completed;
-                    return (
-                      <List.Item
-                        style={{
-                          padding: '12px 16px',
-                          cursor: 'pointer',
-                          transition: 'background 0.2s',
-                          background: selectedReport?.id === report.id ? '#f0f5ff' : undefined,
-                        }}
-                        onClick={() => handleViewDetail(report)}
-                      >
-                        <div style={{ width: '100%' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                            <Text strong ellipsis style={{ fontSize: 13, flex: 1, marginRight: 8 }}>
-                              {report.title}
-                            </Text>
-                            <Tag color={config.color} icon={config.icon} style={{ fontSize: 11, margin: 0 }}>
-                              {config.label}
-                            </Tag>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 11 }}>
-                              PIR: {report.pir_id}
-                            </Text>
-                            <Text type="secondary" style={{ fontSize: 11 }}>
-                              {dayjs(report.created_at).format('YYYY-MM-DD HH:mm')}
-                            </Text>
-                          </div>
-                        </div>
-                      </List.Item>
-                    );
-                  }}
-                  locale={{ emptyText: <Empty description="暂无报告" /> }}
-                />
-              ) : (
-                <Empty description="暂无报告" style={{ padding: 40 }} />
-              )}
-            </Spin>
-          </Card>
-        </Col>
-        <Col span={16}>
-          {detailLoading ? (
-            <Card style={{ borderRadius: 8, minHeight: 400 }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-                <Spin size="large" tip="加载报告详情..." />
-              </div>
-            </Card>
-          ) : selectedReport ? (
-            <div>
-              <Card
-                style={{ borderRadius: 8, marginBottom: 16 }}
-                styles={{ body: { padding: '16px 24px' } }}
-                extra={
-                  <Space>
-                    <Button
-                      icon={<DownloadOutlined />}
-                      onClick={() => handleExport(selectedReport)}
-                    >
-                      导出
-                    </Button>
-                  </Space>
-                }
-              >
-                <Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
-                  {selectedReport.title}
-                </Title>
-                <Descriptions column={3} size="small">
-                  <Descriptions.Item label="状态">
-                    <Tag
-                      color={statusConfig[selectedReport.status]?.color}
-                      icon={statusConfig[selectedReport.status]?.icon}
-                    >
-                      {statusConfig[selectedReport.status]?.label}
-                    </Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="关联PIR">
-                    {selectedReport.pir_id}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="生成时间">
-                    {dayjs(selectedReport.created_at).format('YYYY-MM-DD HH:mm')}
-                  </Descriptions.Item>
-                </Descriptions>
-                <Divider style={{ margin: '12px 0' }} />
-                <Text type="secondary" style={{ fontSize: 12 }}>摘要</Text>
-                <Paragraph style={{ marginTop: 8, fontSize: 14 }}>
-                  {selectedReport.summary || '暂无摘要'}
-                </Paragraph>
-              </Card>
-
-              {selectedReport.sections?.length > 0 && (
-                <Card title="报告内容" style={{ borderRadius: 8, marginBottom: 16 }}>
-                  {selectedReport.sections.map((section, i) => (
-                    <div key={i} style={{ marginBottom: i < selectedReport.sections.length - 1 ? 20 : 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                        <Tag color={sectionTypeColors[section.type] || '#8c8c8c'} style={{ margin: 0 }}>
-                          {sectionTypeLabels[section.type] || section.type}
-                        </Tag>
-                        <Text strong style={{ fontSize: 15, marginLeft: 8 }}>{section.title}</Text>
-                      </div>
-                      <Paragraph style={{ fontSize: 13, whiteSpace: 'pre-wrap', paddingLeft: 4 }}>
-                        {section.content}
-                      </Paragraph>
-                      {i < selectedReport.sections.length - 1 && <Divider style={{ margin: '16px 0' }} />}
-                    </div>
-                  ))}
-                </Card>
-              )}
-
-              {selectedReport.evidence_chain?.length > 0 && (
-                <Card
-                  title={
-                    <Space>
-                      <LinkOutlined />
-                      <span>证据链</span>
-                    </Space>
-                  }
-                  style={{ borderRadius: 8 }}
-                >
-                  <Timeline
-                    items={selectedReport.evidence_chain.map((evidence) => ({
-                      color: evidence.confidence > 0.8 ? 'green' : evidence.confidence > 0.5 ? 'blue' : 'gray',
-                      children: (
-                        <div style={{ paddingBottom: 8 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <Text strong style={{ fontSize: 13 }}>{evidence.description}</Text>
-                            <Space size="small">
-                              <Tag style={{ fontSize: 11, margin: 0 }}>{evidence.source}</Tag>
-                              <Tooltip title={`置信度: ${(evidence.confidence * 100).toFixed(0)}%`}>
-                                <SafetyOutlined style={{ color: evidence.confidence > 0.8 ? '#52c41a' : '#faad14' }} />
-                              </Tooltip>
-                            </Space>
-                          </div>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
-                            {dayjs(evidence.timestamp).format('YYYY-MM-DD HH:mm')}
-                            {evidence.related_entities?.length > 0 && (
-                              <span> · 关联实体: {evidence.related_entities.length}个</span>
-                            )}
-                          </Text>
-                        </div>
-                      ),
-                    }))}
-                  />
-                </Card>
-              )}
-            </div>
-          ) : (
-            <Card style={{ borderRadius: 8, minHeight: 400 }}>
-              <Empty description="请从左侧选择一份报告查看" style={{ marginTop: 120 }} />
-            </Card>
-          )}
-        </Col>
-      </Row>
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={reports.items}
+          rowKey="id"
+          loading={loading}
+          locale={{ emptyText: <Empty description="暂无报告数据" /> }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: reports.total,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
+        />
+      </Card>
 
       <Modal
-        title="生成分析报告"
-        open={generateVisible}
-        onCancel={() => { setGenerateVisible(false); setSelectedPIRId(''); }}
-        onOk={handleGenerate}
-        confirmLoading={generating}
+        title="生成报告"
+        open={generateModalOpen}
+        onCancel={() => { setGenerateModalOpen(false); form.resetFields(); }}
+        onOk={() => form.submit()}
+        okText="生成"
+        cancelText="取消"
       >
-        <div style={{ marginBottom: 16 }}>
-          <Text type="secondary">选择一个已完成的PIR来生成分析报告</Text>
-        </div>
-        <Select
-          style={{ width: '100%' }}
-          placeholder="选择PIR"
-          value={selectedPIRId || undefined}
-          onChange={setSelectedPIRId}
-          showSearch
-          optionFilterProp="label"
-          loading={pirLoading}
-          options={pirOptions.map((pir) => ({
-            label: `${pir.title} (${pir.status === 'completed' ? '已完成' : '进行中'})`,
-            value: pir.id,
-          }))}
-        />
+        <Form form={form} layout="vertical" onFinish={handleGenerate}>
+          <Form.Item name="title" label="报告标题" rules={[{ required: true, message: '请输入报告标题' }]}>
+            <Input placeholder="输入报告标题" />
+          </Form.Item>
+          <Form.Item name="report_type" label="报告类型" initialValue="threat_summary">
+            <Select options={Object.entries(REPORT_TYPE_CONFIG).map(([value, config]) => ({ value, label: config.label }))} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="报告详情"
+        open={detailModalOpen}
+        onCancel={() => { setDetailModalOpen(false); setSelectedReport(null); }}
+        footer={selectedReport?.status === 'completed' ? (
+          <Button icon={<DownloadOutlined />} type="primary" onClick={() => selectedReport && handleExport(selectedReport.id)}>
+            导出
+          </Button>
+        ) : null}
+        width={700}
+      >
+        {detailLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        ) : selectedReport ? (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <Space>
+                <Tag color={REPORT_TYPE_CONFIG[selectedReport.report_type]?.color}>
+                  {REPORT_TYPE_CONFIG[selectedReport.report_type]?.label || selectedReport.report_type}
+                </Tag>
+                <Tag color={REPORT_STATUS_CONFIG[selectedReport.status]?.color}>
+                  {REPORT_STATUS_CONFIG[selectedReport.status]?.label || selectedReport.status}
+                </Tag>
+              </Space>
+            </div>
+
+            <Paragraph><Text strong>标题: </Text>{selectedReport.title}</Paragraph>
+
+            {selectedReport.content ? (
+              <div>
+                <Text strong>内容:</Text>
+                <div style={{
+                  marginTop: 8,
+                  padding: 16,
+                  background: '#f5f5f5',
+                  borderRadius: 4,
+                  maxHeight: 400,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {selectedReport.content}
+                </div>
+              </div>
+            ) : (
+              <Empty description="报告内容尚未生成" style={{ marginTop: 20 }} />
+            )}
+          </div>
+        ) : (
+          <Empty description="未找到报告数据" />
+        )}
       </Modal>
     </div>
   );

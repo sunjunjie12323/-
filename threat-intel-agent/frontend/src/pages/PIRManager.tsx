@@ -1,162 +1,128 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table,
-  Tag,
-  Button,
-  Space,
-  Modal,
-  Form,
-  Input,
-  Select,
-  Progress,
-  Typography,
-  Descriptions,
-  Divider,
-  List,
-  Badge,
-  message,
-  Spin,
-  Tooltip,
-  Empty,
-  Alert,
+  Card, Table, Tag, Button, Space, Modal, Form, Input, Select, message,
+  Empty, Spin, Typography, Popconfirm, Progress, List, Badge, Tooltip,
 } from 'antd';
 import {
-  PlusOutlined,
-  ThunderboltOutlined,
-  SplitCellsOutlined,
-  EyeOutlined,
-  PlayCircleOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  SyncOutlined,
-  ClockCircleOutlined,
-  CloseCircleOutlined,
-  FileTextOutlined,
+  PlusOutlined, ReloadOutlined, DeleteOutlined, PlayCircleOutlined,
+  ScissorOutlined, EyeOutlined, CheckCircleOutlined, ClockCircleOutlined,
+  ExclamationCircleOutlined, SyncOutlined,
 } from '@ant-design/icons';
-import { pirApi, taskApi, extractErrorMessage } from '../services/api';
-import type { PIR, PIRTask, Task } from '../types';
-import dayjs from 'dayjs';
+import { pirsApi, getErrorMessage } from '../services/api';
+import type { PIR, PIRTask, PaginatedResponse } from '../types';
 
-const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
 
-const priorityConfig: Record<string, { color: string; label: string }> = {
-  critical: { color: 'red', label: '紧急' },
-  high: { color: 'orange', label: '高' },
-  medium: { color: 'gold', label: '中' },
-  low: { color: 'green', label: '低' },
+const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
+  critical: { color: '#cf1322', label: '紧急' },
+  high: { color: '#d4380d', label: '高' },
+  medium: { color: '#d48806', label: '中' },
+  low: { color: '#389e0d', label: '低' },
 };
 
-const statusConfig: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
-  draft: { color: 'default', label: '草稿', icon: <ClockCircleOutlined /> },
-  active: { color: 'blue', label: '活跃', icon: <PlayCircleOutlined /> },
-  executing: { color: 'processing', label: '执行中', icon: <SyncOutlined spin /> },
+const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
+  draft: { color: 'default', label: '草稿' },
+  active: { color: 'processing', label: '活跃' },
+  executing: { color: 'blue', label: '执行中' },
+  fulfilled: { color: 'success', label: '已完成' },
+  archived: { color: 'default', label: '已归档' },
+};
+
+const TASK_STATUS_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
+  pending: { color: 'default', label: '待执行', icon: <ClockCircleOutlined /> },
+  running: { color: 'processing', label: '运行中', icon: <SyncOutlined spin /> },
   completed: { color: 'success', label: '已完成', icon: <CheckCircleOutlined /> },
-  archived: { color: 'default', label: '已归档', icon: <CloseCircleOutlined /> },
-};
-
-const taskStatusConfig: Record<string, { color: string; label: string }> = {
-  pending: { color: 'default', label: '待执行' },
-  running: { color: 'processing', label: '执行中' },
-  completed: { color: 'success', label: '已完成' },
-  failed: { color: 'error', label: '失败' },
+  failed: { color: 'error', label: '失败', icon: <ExclamationCircleOutlined /> },
 };
 
 const PIRManager: React.FC = () => {
+  const [pirs, setPirs] = useState<PaginatedResponse<PIR>>({ items: [], total: 0, offset: 0, limit: 20 });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pirs, setPirs] = useState<PIR[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [createVisible, setCreateVisible] = useState(false);
-  const [detailVisible, setDetailVisible] = useState(false);
-  const [selectedPIR, setSelectedPIR] = useState<PIR | null>(null);
+  const [pageSize, setPageSize] = useState(20);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedPir, setSelectedPir] = useState<PIR | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [executing, setExecuting] = useState<string | null>(null);
-  const [decomposing, setDecomposing] = useState<string | null>(null);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createForm] = Form.useForm();
+  const [form] = Form.useForm();
 
-  const fetchPIRs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchPirs = useCallback(async () => {
     try {
-      const result = await pirApi.getPIRs({ page, page_size: pageSize });
-      setPirs(result.items);
-      setTotal(result.total);
+      setLoading(true);
+      const result = await pirsApi.list({
+        status: statusFilter,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+      });
+      setPirs(result);
     } catch (err) {
-      setError(extractErrorMessage(err));
-      setPirs([]);
-      setTotal(0);
+      message.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [statusFilter, page, pageSize]);
 
   useEffect(() => {
-    fetchPIRs();
-  }, [fetchPIRs]);
+    fetchPirs();
+  }, [fetchPirs]);
 
-  const handleCreate = async (values: Record<string, unknown>) => {
-    setCreateLoading(true);
+  const handleCreate = async (values: { title: string; description?: string; priority?: string; keywords?: string; target_sources?: string }) => {
     try {
-      await pirApi.createPIR(values as Partial<PIR>);
+      await pirsApi.create({
+        title: values.title,
+        description: values.description || '',
+        priority: values.priority || 'medium',
+        keywords: values.keywords ? values.keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : [],
+        target_sources: values.target_sources ? values.target_sources.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+      });
       message.success('PIR创建成功');
+      setCreateModalOpen(false);
+      form.resetFields();
+      fetchPirs();
     } catch (err) {
-      message.error(`创建失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     }
-    setCreateLoading(false);
-    setCreateVisible(false);
-    createForm.resetFields();
-    fetchPIRs();
+  };
+
+  const handleDelete = async (pirId: string) => {
+    try {
+      await pirsApi.delete(pirId);
+      message.success('删除成功');
+      fetchPirs();
+    } catch (err) {
+      message.error(getErrorMessage(err));
+    }
   };
 
   const handleDecompose = async (pirId: string) => {
-    setDecomposing(pirId);
     try {
-      await pirApi.decomposePIR(pirId);
-      message.success('PIR分解完成');
+      const result = await pirsApi.decompose(pirId);
+      message.success(`任务分解完成，共 ${result.task_count} 个任务`);
+      fetchPirs();
     } catch (err) {
-      message.error(`分解失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     }
-    setDecomposing(null);
-    fetchPIRs();
   };
 
   const handleExecute = async (pirId: string) => {
-    setExecuting(pirId);
     try {
-      const result = await pirApi.executePIR(pirId);
-      message.success('PIR执行已启动');
-      if (result.id) {
-        try {
-          const task = await taskApi.waitForCompletion(result.id, 2000, 30);
-          if (task.status === 'completed') {
-            message.success('PIR执行完成');
-          } else if (task.status === 'failed') {
-            message.error(`PIR执行失败: ${task.error || '未知错误'}`);
-          }
-        } catch {
-          message.info('执行中，请稍后刷新查看结果');
-        }
-      }
+      const result = await pirsApi.execute(pirId);
+      message.success(`PIR执行已提交，任务ID: ${result.task_id}`);
+      fetchPirs();
     } catch (err) {
-      message.error(`执行失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     }
-    setExecuting(null);
-    fetchPIRs();
   };
 
-  const handleViewDetail = async (pir: PIR) => {
+  const handleViewDetail = async (pirId: string) => {
+    setDetailModalOpen(true);
     setDetailLoading(true);
-    setDetailVisible(true);
     try {
-      const detail = await pirApi.getPIRDetail(pir.id);
-      setSelectedPIR(detail);
+      const pir = await pirsApi.get(pirId);
+      setSelectedPir(pir);
     } catch (err) {
-      message.warning('详情加载失败，显示基本信息');
-      setSelectedPIR(pir);
+      message.error(getErrorMessage(err));
     } finally {
       setDetailLoading(false);
     }
@@ -168,114 +134,80 @@ const PIRManager: React.FC = () => {
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
-      render: (text: string, record: PIR) => (
-        <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => handleViewDetail(record)}>
-          {text}
-        </Button>
-      ),
+      render: (title: string) => <Text strong>{title}</Text>,
     },
     {
       title: '优先级',
       dataIndex: 'priority',
       key: 'priority',
-      width: 90,
+      width: 80,
       render: (priority: string) => {
-        const config = priorityConfig[priority] || priorityConfig.medium;
-        return <Tag color={config.color}>{config.label}</Tag>;
+        const config = PRIORITY_CONFIG[priority];
+        return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{priority}</Tag>;
       },
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 110,
+      width: 100,
       render: (status: string) => {
-        const config = statusConfig[status] || statusConfig.draft;
-        return (
-          <Tag color={config.color} icon={config.icon}>
-            {config.label}
-          </Tag>
-        );
+        const config = STATUS_CONFIG[status];
+        return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{status}</Tag>;
       },
     },
     {
       title: '完成度',
       dataIndex: 'fulfillment_score',
       key: 'fulfillment_score',
-      width: 160,
+      width: 120,
       render: (score: number) => (
         <Progress
-          percent={score}
+          percent={score || 0}
           size="small"
-          status={score >= 100 ? 'success' : score > 60 ? 'active' : 'normal'}
-          strokeColor={score >= 100 ? '#52c41a' : score > 60 ? '#1890ff' : '#faad14'}
+          status={score >= 100 ? 'success' : 'active'}
         />
       ),
     },
     {
-      title: '子任务',
-      dataIndex: 'tasks',
-      key: 'tasks',
-      width: 100,
-      render: (tasks: PIRTask[]) => {
-        const completed = tasks?.filter((t) => t.status === 'completed').length || 0;
-        return (
-          <Text style={{ fontSize: 12 }}>
-            {completed}/{tasks?.length || 0}
-          </Text>
-        );
-      },
-    },
-    {
-      title: '报告',
-      dataIndex: 'generated_reports',
-      key: 'generated_reports',
-      width: 80,
-      render: (reports: string[]) => (
-        <Badge count={reports?.length || 0} size="small">
-          <FileTextOutlined style={{ fontSize: 16 }} />
-        </Badge>
+      title: '关键词',
+      dataIndex: 'keywords',
+      key: 'keywords',
+      width: 200,
+      render: (keywords: string[]) => (
+        <Space size={[4, 4]} wrap>
+          {(keywords || []).slice(0, 3).map((kw, idx) => <Tag key={idx}>{kw}</Tag>)}
+          {keywords && keywords.length > 3 && <Tag>+{keywords.length - 3}</Tag>}
+        </Space>
       ),
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 120,
-      render: (date: string) => dayjs(date).format('MM-DD HH:mm'),
-    },
-    {
       title: '操作',
-      key: 'actions',
+      key: 'action',
       width: 200,
       render: (_: unknown, record: PIR) => (
         <Space size="small">
           <Tooltip title="查看详情">
-            <Button
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handleViewDetail(record)}
-            />
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record.id)} />
           </Tooltip>
-          <Tooltip title="分解任务">
-            <Button
-              size="small"
-              icon={<SplitCellsOutlined />}
-              onClick={() => handleDecompose(record.id)}
-              loading={decomposing === record.id}
-              disabled={record.status === 'executing' || record.status === 'completed'}
-            />
-          </Tooltip>
-          <Tooltip title="执行PIR">
-            <Button
-              size="small"
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              onClick={() => handleExecute(record.id)}
-              loading={executing === record.id}
-              disabled={record.status === 'executing' || record.status === 'completed'}
-            />
-          </Tooltip>
+          {record.status === 'draft' && (
+            <>
+              <Tooltip title="任务分解">
+                <Button type="link" size="small" icon={<ScissorOutlined />} onClick={() => handleDecompose(record.id)} />
+              </Tooltip>
+              <Tooltip title="执行">
+                <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record.id)} />
+              </Tooltip>
+            </>
+          )}
+          {record.status === 'active' && (
+            <Tooltip title="执行">
+              <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record.id)} />
+            </Tooltip>
+          )}
+          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
         </Space>
       ),
     },
@@ -283,213 +215,138 @@ const PIRManager: React.FC = () => {
 
   return (
     <div>
-      {error && (
-        <Alert
-          message="数据加载失败"
-          description={error}
-          type="error"
-          showIcon
-          closable
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={fetchPIRs}>
-              重试
-            </Button>
-          }
-        />
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          <Title level={5} style={{ margin: 0 }}>
-            情报需求管理
-          </Title>
-          <Tag color="blue">{total} 个PIR</Tag>
-        </Space>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchPIRs}>
-            刷新
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateVisible(true)}>
+      <Card style={{ marginBottom: 16 }}>
+        <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space wrap>
+            <Select
+              placeholder="状态筛选"
+              value={statusFilter}
+              onChange={(v) => { setStatusFilter(v); setPage(1); }}
+              options={Object.entries(STATUS_CONFIG).map(([value, config]) => ({ value, label: config.label }))}
+              allowClear
+              style={{ width: 130 }}
+            />
+            <Button icon={<ReloadOutlined />} onClick={fetchPirs}>刷新</Button>
+          </Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
             新建PIR
           </Button>
         </Space>
-      </div>
+      </Card>
 
-      <Table
-        columns={columns}
-        dataSource={pirs}
-        rowKey="id"
-        loading={loading}
-        locale={{ emptyText: error ? <Empty description="数据加载失败" /> : <Empty description="暂无PIR数据" /> }}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 个PIR`,
-          onChange: (p, ps) => {
-            setPage(p);
-            setPageSize(ps);
-          },
-        }}
-        style={{ borderRadius: 8, overflow: 'hidden' }}
-      />
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={pirs.items}
+          rowKey="id"
+          loading={loading}
+          locale={{ emptyText: <Empty description="暂无PIR数据" /> }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: pirs.total,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
+        />
+      </Card>
 
       <Modal
-        title="新建情报需求 (PIR)"
-        open={createVisible}
-        onCancel={() => setCreateVisible(false)}
-        onOk={() => createForm.submit()}
-        confirmLoading={createLoading}
-        width={640}
+        title="新建PIR"
+        open={createModalOpen}
+        onCancel={() => { setCreateModalOpen(false); form.resetFields(); }}
+        onOk={() => form.submit()}
+        okText="创建"
+        cancelText="取消"
+        width={600}
       >
-        <Form form={createForm} layout="vertical" onFinish={handleCreate}>
+        <Form form={form} layout="vertical" onFinish={handleCreate}>
           <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入PIR标题' }]}>
-            <Input placeholder="输入情报需求标题" />
+            <Input placeholder="输入PIR标题" />
           </Form.Item>
-          <Form.Item name="priority" label="优先级" initialValue="medium" rules={[{ required: true }]}>
-            <Select
-              options={Object.entries(priorityConfig).map(([value, config]) => ({
-                label: config.label,
-                value,
-              }))}
-            />
+          <Form.Item name="description" label="描述">
+            <Input.TextArea rows={3} placeholder="描述情报需求..." />
           </Form.Item>
-          <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入PIR描述' }]}>
-            <TextArea rows={4} placeholder="详细描述情报需求，包含关注的目标、范围和期望输出" />
+          <Form.Item name="priority" label="优先级" initialValue="medium">
+            <Select options={Object.entries(PRIORITY_CONFIG).map(([value, config]) => ({ value, label: config.label }))} />
           </Form.Item>
-          <Form.Item name="keywords" label="关键词">
-            <Select mode="tags" placeholder="输入关键词后回车" />
+          <Form.Item name="keywords" label="关键词（逗号分隔）">
+            <Input placeholder="例如: 暗网,数据泄露,黑客" />
           </Form.Item>
-          <Form.Item name="target_entities" label="目标实体">
-            <Select mode="tags" placeholder="输入目标实体ID或名称" />
+          <Form.Item name="target_sources" label="目标来源（逗号分隔）">
+            <Input placeholder="例如: telegram,dark_web" />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
         title="PIR详情"
-        open={detailVisible}
-        onCancel={() => setDetailVisible(false)}
-        width={760}
-        footer={[
-          <Button key="close" onClick={() => setDetailVisible(false)}>
-            关闭
-          </Button>,
-          selectedPIR?.status !== 'completed' && (
-            <Button
-              key="decompose"
-              icon={<SplitCellsOutlined />}
-              onClick={() => {
-                if (selectedPIR) handleDecompose(selectedPIR.id);
-              }}
-            >
-              分解任务
-            </Button>
-          ),
-          (selectedPIR?.status === 'active' || selectedPIR?.status === 'draft') && (
-            <Button
-              key="execute"
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              onClick={() => {
-                if (selectedPIR) handleExecute(selectedPIR.id);
-              }}
-            >
-              执行PIR
-            </Button>
-          ),
-        ].filter(Boolean)}
+        open={detailModalOpen}
+        onCancel={() => { setDetailModalOpen(false); setSelectedPir(null); }}
+        footer={null}
+        width={700}
       >
         {detailLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin size="large" tip="加载详情..." />
-          </div>
-        ) : selectedPIR ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        ) : selectedPir ? (
           <div>
-            <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="标题" span={2}>
-                <Text strong>{selectedPIR.title}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="优先级">
-                <Tag color={priorityConfig[selectedPIR.priority]?.color}>
-                  {priorityConfig[selectedPIR.priority]?.label}
+            <div style={{ marginBottom: 16 }}>
+              <Space>
+                <Tag color={PRIORITY_CONFIG[selectedPir.priority]?.color}>
+                  {PRIORITY_CONFIG[selectedPir.priority]?.label || selectedPir.priority}
                 </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="状态">
-                <Tag color={statusConfig[selectedPIR.status]?.color} icon={statusConfig[selectedPIR.status]?.icon}>
-                  {statusConfig[selectedPIR.status]?.label}
+                <Tag color={STATUS_CONFIG[selectedPir.status]?.color}>
+                  {STATUS_CONFIG[selectedPir.status]?.label || selectedPir.status}
                 </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="创建时间">
-                {dayjs(selectedPIR.created_at).format('YYYY-MM-DD HH:mm')}
-              </Descriptions.Item>
-              <Descriptions.Item label="更新时间">
-                {dayjs(selectedPIR.updated_at).format('YYYY-MM-DD HH:mm')}
-              </Descriptions.Item>
-              <Descriptions.Item label="完成度" span={2}>
-                <Progress
-                  percent={selectedPIR.fulfillment_score}
-                  status={selectedPIR.fulfillment_score >= 100 ? 'success' : 'active'}
+              </Space>
+            </div>
+
+            <Paragraph><Text strong>标题: </Text>{selectedPir.title}</Paragraph>
+            {selectedPir.description && <Paragraph><Text strong>描述: </Text>{selectedPir.description}</Paragraph>}
+
+            {selectedPir.keywords && selectedPir.keywords.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <Text strong>关键词: </Text>
+                <Space size={[4, 4]} wrap>{selectedPir.keywords.map((kw, idx) => <Tag key={idx}>{kw}</Tag>)}</Space>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>完成度: </Text>
+              <Progress percent={selectedPir.fulfillment_score || 0} style={{ maxWidth: 300, display: 'inline-block', marginLeft: 8 }} />
+            </div>
+
+            {selectedPir.tasks && selectedPir.tasks.length > 0 && (
+              <div>
+                <Text strong style={{ display: 'block', marginBottom: 8 }}>任务列表:</Text>
+                <List
+                  size="small"
+                  dataSource={selectedPir.tasks}
+                  renderItem={(task: PIRTask) => {
+                    const taskConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.pending;
+                    return (
+                      <List.Item>
+                        <List.Item.Meta
+                          avatar={taskConfig.icon}
+                          title={
+                            <span>
+                              <Tag color={taskConfig.color}>{taskConfig.label}</Tag>
+                              {task.agent_type}
+                            </span>
+                          }
+                          description={task.task_description || `PIR任务 - ${task.agent_type}`}
+                        />
+                      </List.Item>
+                    );
+                  }}
                 />
-              </Descriptions.Item>
-            </Descriptions>
-
-            <Divider orientation="left">描述</Divider>
-            <Paragraph>{selectedPIR.description}</Paragraph>
-
-            {selectedPIR.keywords?.length > 0 && (
-              <>
-                <Divider orientation="left">关键词</Divider>
-                <Space wrap>
-                  {selectedPIR.keywords.map((kw, i) => (
-                    <Tag key={i} color="blue">{kw}</Tag>
-                  ))}
-                </Space>
-              </>
-            )}
-
-            <Divider orientation="left">子任务列表</Divider>
-            {selectedPIR.tasks?.length > 0 ? (
-              <List
-                size="small"
-                dataSource={selectedPIR.tasks}
-                renderItem={(task: PIRTask) => (
-                  <List.Item>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                      <Space>
-                        <Tag color={taskStatusConfig[task.status]?.color}>
-                          {taskStatusConfig[task.status]?.label}
-                        </Tag>
-                        <Tag>{task.task_type}</Tag>
-                        <Text style={{ fontSize: 13 }}>{task.description}</Text>
-                      </Space>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {dayjs(task.created_at).format('HH:mm')}
-                      </Text>
-                    </div>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Empty description="暂无子任务，请先分解PIR" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            )}
-
-            {selectedPIR.generated_reports?.length > 0 && (
-              <>
-                <Divider orientation="left">生成报告</Divider>
-                <Space wrap>
-                  {selectedPIR.generated_reports.map((reportId, i) => (
-                    <Tag key={i} icon={<FileTextOutlined />} color="green">
-                      报告 {reportId}
-                    </Tag>
-                  ))}
-                </Space>
-              </>
+              </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          <Empty description="未找到PIR数据" />
+        )}
       </Modal>
     </div>
   );

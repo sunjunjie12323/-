@@ -52,7 +52,7 @@ async def graph_stats(
         return stats
     except Exception as exc:
         logger.error(f"Failed to get graph stats: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        return {"node_count": 0, "edge_count": 0, "entity_types": {}}
 
 
 @router.get("/entities")
@@ -89,7 +89,7 @@ async def list_entities(
         }
     except Exception as exc:
         logger.error(f"Failed to list graph entities: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        return {"items": [], "total": 0, "offset": offset, "limit": limit}
 
 
 @router.get("/entities/{entity_id}")
@@ -102,7 +102,7 @@ async def get_entity(
     try:
         entity = await kg.get_entity(entity_id)
         if entity is None:
-            raise HTTPException(status_code=404, detail="Entity not found in knowledge graph")
+            raise HTTPException(status_code=404, detail="实体未在知识图谱中找到")
         relations = await kg.get_entity_relations(entity_id)
         return {
             "entity": entity.model_dump(),
@@ -140,7 +140,7 @@ async def list_relations(
         }
     except Exception as exc:
         logger.error(f"Failed to list relations: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        return {"items": [], "total": 0, "offset": offset, "limit": limit}
 
 
 @router.post("/entities", status_code=201)
@@ -156,8 +156,8 @@ async def add_entity(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid entity type: {data.type}. "
-                       f"Valid types: {[t.value for t in EntityType]}",
+                detail=f"无效实体类型: {data.type}. "
+                       f"有效类型: {[t.value for t in EntityType]}",
             )
         entity = Entity(
             type=entity_type,
@@ -188,20 +188,20 @@ async def add_relation(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid relation type: {data.type}. "
-                       f"Valid types: {[t.value for t in RelationType]}",
+                detail=f"无效关系类型: {data.type}. "
+                       f"有效类型: {[t.value for t in RelationType]}",
             )
         source = await kg.get_entity(data.source_entity_id)
         if source is None:
             raise HTTPException(
                 status_code=400,
-                detail=f"Source entity {data.source_entity_id} not found",
+                detail=f"源实体 {data.source_entity_id} 未找到",
             )
         target = await kg.get_entity(data.target_entity_id)
         if target is None:
             raise HTTPException(
                 status_code=400,
-                detail=f"Target entity {data.target_entity_id} not found",
+                detail=f"目标实体 {data.target_entity_id} 未找到",
             )
         relation = Relation(
             source_entity_id=data.source_entity_id,
@@ -232,17 +232,25 @@ async def find_path(
         if source is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Source entity {data.source_id} not found",
+                detail=f"源实体 {data.source_id} 未找到",
             )
         target = await kg.get_entity(data.target_id)
         if target is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Target entity {data.target_id} not found",
+                detail=f"目标实体 {data.target_id} 未找到",
             )
         paths = await kg.find_path(
             data.source_id, data.target_id, max_depth=data.max_depth
         )
+        if not paths:
+            return {
+                "source_id": data.source_id,
+                "target_id": data.target_id,
+                "paths": [],
+                "path_count": 0,
+                "message": "未找到连接路径，两个实体可能不在同一连通分量中",
+            }
         enriched_paths = []
         for path in paths:
             enriched_nodes = []
@@ -278,6 +286,12 @@ async def find_communities(
 ):
     kg = get_knowledge_graph(request)
     try:
+        if len(kg._entities) == 0:
+            return {
+                "algorithm": data.algorithm,
+                "communities": [],
+                "community_count": 0,
+            }
         communities = await kg.find_communities(algorithm=data.algorithm)
         result = []
         for community in communities:
@@ -319,7 +333,7 @@ async def get_subgraph(
         if entity is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Entity {entity_id} not found",
+                detail=f"实体 {entity_id} 未找到",
             )
         subgraph = await kg.get_subgraph([entity_id], depth=depth)
         return subgraph
@@ -345,3 +359,50 @@ async def export_graph(
     except Exception as exc:
         logger.error(f"Failed to export graph: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/data")
+async def get_graph_data(
+    entity_type: Optional[str] = None,
+    search: Optional[str] = None,
+    depth: int = Query(1, ge=1, le=3),
+    request: Request = None,
+    current_user: User = Depends(get_current_user),
+):
+    kg = get_knowledge_graph(request)
+    try:
+        nodes = []
+        edges = []
+
+        all_entities = list(kg._entities.values())
+        if entity_type:
+            all_entities = [e for e in all_entities if e.type.value == entity_type]
+        if search:
+            search_lower = search.lower()
+            all_entities = [e for e in all_entities if search_lower in e.value.lower()]
+
+        for entity in all_entities:
+            nodes.append({
+                "id": entity.id,
+                "label": entity.value,
+                "entity_type": entity.type.value,
+                "properties": {},
+                "confidence": entity.confidence,
+            })
+
+        entity_ids = {e.id for e in all_entities}
+        for relation in kg._relations.values():
+            if relation.source_entity_id in entity_ids and relation.target_entity_id in entity_ids:
+                edges.append({
+                    "id": relation.id,
+                    "source": relation.source_entity_id,
+                    "target": relation.target_entity_id,
+                    "relation_type": relation.type.value,
+                    "properties": {},
+                    "confidence": relation.confidence,
+                })
+
+        return {"nodes": nodes, "edges": edges}
+    except Exception as exc:
+        logger.error(f"Failed to get graph data: {exc}")
+        return {"nodes": [], "edges": []}

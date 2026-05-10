@@ -18,6 +18,7 @@ from app.core.auth import (
     require_role,
     update_user_password,
     verify_password,
+    get_user_by_username,
 )
 from app.core.exceptions import ForbiddenException, UnauthorizedException, ValidationException
 
@@ -48,14 +49,13 @@ class ChangePasswordRequest(BaseModel):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(data: LoginRequest):
-    from app.core.auth import get_user_by_username
     user = get_user_by_username(data.username)
     if user is None:
-        raise UnauthorizedException(detail="Invalid username or password")
+        raise UnauthorizedException(detail="用户名或密码错误")
     if not user.is_active:
-        raise UnauthorizedException(detail="User account is deactivated")
+        raise UnauthorizedException(detail="用户账号已被停用")
     if not verify_password(data.password, user.hashed_password):
-        raise UnauthorizedException(detail="Invalid username or password")
+        raise UnauthorizedException(detail="用户名或密码错误")
     access_token = create_access_token(user)
     logger.info(f"User logged in: {data.username}")
     return LoginResponse(
@@ -75,6 +75,9 @@ async def register(
     data: RegisterRequest,
     current_user: User = Depends(require_role(Role.ADMIN)),
 ):
+    existing = get_user_by_username(data.username)
+    if existing is not None:
+        raise ValidationException(detail=f"用户名 '{data.username}' 已存在")
     try:
         user = create_user(
             username=data.username,
@@ -83,6 +86,9 @@ async def register(
         )
     except ValueError as exc:
         raise ValidationException(detail=str(exc))
+    except Exception as exc:
+        logger.error(f"Failed to create user: {exc}")
+        raise ValidationException(detail=f"创建用户失败: {str(exc)}")
     return UserOut(
         id=user.id,
         username=user.username,
@@ -109,11 +115,11 @@ async def change_password(
     current_user: User = Depends(get_current_user),
 ):
     if not verify_password(data.current_password, current_user.hashed_password):
-        raise ValidationException(detail="Current password is incorrect")
+        raise ValidationException(detail="当前密码不正确")
     if data.current_password == data.new_password:
-        raise ValidationException(detail="New password must be different from current password")
+        raise ValidationException(detail="新密码不能与当前密码相同")
     update_user_password(current_user.username, data.new_password)
-    return {"message": "Password updated successfully"}
+    return {"message": "密码修改成功"}
 
 
 @router.post("/logout")
@@ -125,7 +131,7 @@ async def logout(
     token = credentials.credentials
     blacklist_token(token)
     logger.info(f"User logged out: {current_user.username}")
-    return {"message": "Logged out successfully"}
+    return {"message": "退出登录成功"}
 
 
 @router.get("/users", response_model=List[UserOut])

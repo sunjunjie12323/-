@@ -1,110 +1,89 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Typography, Alert, Space, message } from 'antd';
-import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { authApi, extractErrorMessage } from '../services/api';
+import { Form, Input, Button, Card, Typography, Alert, Checkbox, message } from 'antd';
+import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { authApi, getErrorMessage } from '../services/api';
 
 const { Title, Text } = Typography;
 
-const LoginPage: React.FC = () => {
+interface LoginProps {
+  onLoginSuccess: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [form] = Form.useForm();
 
-  const handleLogin = async (values: { username: string; password: string }) => {
-    setLoading(true);
-    setError(null);
+  const handleLogin = async (values: { username: string; password: string; remember: boolean }) => {
     try {
-      await authApi.login(values);
-      message.success('登录成功');
-      navigate('/', { replace: true });
+      setLoading(true);
+      setError(null);
+      const result = await authApi.login(values.username, values.password);
+      if (values.remember) {
+        localStorage.setItem('remember_user', values.username);
+      } else {
+        localStorage.removeItem('remember_user');
+      }
+      message.success(`欢迎回来，${result.user.username}！`);
+      onLoginSuccess();
     } catch (err) {
-      const msg = extractErrorMessage(err);
-      setError(msg);
+      const errMsg = getErrorMessage(err);
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
   };
 
+  const rememberedUser = localStorage.getItem('remember_user') || '';
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #001529 0%, #003a70 50%, #002140 100%)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'radial-gradient(ellipse at 30% 20%, rgba(24,144,255,0.15) 0%, transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(114,46,209,0.1) 0%, transparent 50%)',
-        }}
-      />
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+    }}>
       <Card
         style={{
-          width: 420,
-          borderRadius: 12,
-          boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
-          position: 'relative',
-          zIndex: 1,
+          width: 400,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+          borderRadius: 8,
         }}
-        styles={{ body: { padding: '40px 36px' } }}
       >
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'linear-gradient(135deg, #1890ff 0%, #722ed1 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px',
-            }}
-          >
-            <SafetyOutlined style={{ fontSize: 32, color: '#fff' }} />
-          </div>
-          <Title level={3} style={{ margin: 0, marginBottom: 4 }}>
-            黑灰产情报分析Agent
-          </Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            安全态势感知平台
-          </Text>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <SafetyCertificateOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 12 }} />
+          <Title level={3} style={{ marginBottom: 4 }}>黑灰产情报分析系统</Title>
+          <Text type="secondary">Threat Intelligence Analysis Platform</Text>
         </div>
 
         {error && (
           <Alert
-            message={error}
+            message="登录失败"
+            description={error}
             type="error"
             showIcon
             closable
             onClose={() => setError(null)}
-            style={{ marginBottom: 20 }}
+            style={{ marginBottom: 16 }}
           />
         )}
 
         <Form
-          name="login"
+          form={form}
+          layout="vertical"
           onFinish={handleLogin}
-          autoComplete="off"
-          size="large"
+          initialValues={{ remember: !!rememberedUser, username: rememberedUser }}
         >
           <Form.Item
             name="username"
             rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input
-              prefix={<UserOutlined style={{ color: '#bfbfbf' }} />}
+              prefix={<UserOutlined />}
               placeholder="用户名"
+              size="large"
+              autoComplete="username"
             />
           </Form.Item>
 
@@ -113,39 +92,38 @@ const LoginPage: React.FC = () => {
             rules={[{ required: true, message: '请输入密码' }]}
           >
             <Input.Password
-              prefix={<LockOutlined style={{ color: '#bfbfbf' }} />}
+              prefix={<LockOutlined />}
               placeholder="密码"
+              size="large"
+              autoComplete="current-password"
             />
           </Form.Item>
 
-          <Form.Item style={{ marginBottom: 12 }}>
+          <Form.Item name="remember" valuePropName="checked">
+            <Checkbox>记住用户名</Checkbox>
+          </Form.Item>
+
+          <Form.Item>
             <Button
               type="primary"
               htmlType="submit"
               loading={loading}
               block
-              style={{
-                height: 44,
-                borderRadius: 8,
-                fontWeight: 600,
-                fontSize: 15,
-              }}
+              size="large"
             >
-              登 录
+              登录
             </Button>
           </Form.Item>
         </Form>
 
         <div style={{ textAlign: 'center' }}>
-          <Space direction="vertical" size={4}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              默认管理员账号: admin / admin123
-            </Text>
-          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            默认管理员: admin / admin123
+          </Text>
         </div>
       </Card>
     </div>
   );
 };
 
-export default LoginPage;
+export default Login;

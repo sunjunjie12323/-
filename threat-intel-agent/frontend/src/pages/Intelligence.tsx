@@ -1,430 +1,367 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Input,
-  Select,
-  DatePicker,
-  Button,
-  Space,
-  Row,
-  Col,
-  Card,
-  Modal,
-  Form,
-  message,
-  Spin,
-  Empty,
-  Pagination,
-  Tag,
-  Typography,
-  Descriptions,
-  Divider,
-  Checkbox,
-  Alert,
-  Skeleton,
+  Card, Table, Tag, Input, Select, Button, Space, Modal, Form, message,
+  Empty, Spin, Typography, Popconfirm, Badge, Tooltip,
 } from 'antd';
 import {
-  SearchOutlined,
-  PlusOutlined,
-  ExperimentOutlined,
-  ClearOutlined,
-  ReloadOutlined,
+  PlusOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined,
+  EyeOutlined, FilterOutlined,
 } from '@ant-design/icons';
-import IntelCard from '../components/IntelCard';
-import { intelligenceApi, extractErrorMessage } from '../services/api';
-import type { Intelligence } from '../types';
-import dayjs from 'dayjs';
+import { intelligenceApi, getErrorMessage } from '../services/api';
+import type { IntelligenceItem, IntelligenceStats, PaginatedResponse } from '../types';
 
-const { RangePicker } = DatePicker;
-const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
 
-const sourceTypeOptions = [
-  { label: 'Telegram', value: 'telegram' },
-  { label: '暗网', value: 'dark_web' },
-  { label: '论坛', value: 'forum' },
-  { label: '社交媒体', value: 'social_media' },
-  { label: '其他', value: 'other' },
-];
-
-const threatLevelOptions = [
-  { label: '严重', value: 'critical' },
-  { label: '高危', value: 'high' },
-  { label: '中危', value: 'medium' },
-  { label: '低危', value: 'low' },
-  { label: '信息', value: 'info' },
-];
-
-const sourceTypeLabels: Record<string, string> = {
-  telegram: 'Telegram',
-  dark_web: '暗网',
-  forum: '论坛',
-  social_media: '社交媒体',
-  other: '其他',
+const THREAT_LEVEL_CONFIG: Record<string, { color: string; label: string }> = {
+  critical: { color: '#cf1322', label: '严重' },
+  high: { color: '#d4380d', label: '高危' },
+  medium: { color: '#d48806', label: '中危' },
+  low: { color: '#389e0d', label: '低危' },
+  info: { color: '#0958d9', label: '信息' },
 };
 
-const threatLevelLabels: Record<string, string> = {
-  critical: '严重',
-  high: '高危',
-  medium: '中危',
-  low: '低危',
-  info: '信息',
+const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
+  raw: { color: 'default', label: '原始' },
+  cleaned: { color: 'processing', label: '已清洗' },
+  analyzed: { color: 'success', label: '已分析' },
 };
 
-const IntelligencePage: React.FC = () => {
+const SOURCE_OPTIONS = [
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'dark_web', label: '暗网' },
+  { value: 'forum', label: '论坛' },
+  { value: 'social_media', label: '社交媒体' },
+  { value: 'other', label: '其他' },
+];
+
+const THREAT_LEVEL_OPTIONS = [
+  { value: 'critical', label: '严重' },
+  { value: 'high', label: '高危' },
+  { value: 'medium', label: '中危' },
+  { value: 'low', label: '低危' },
+  { value: 'info', label: '信息' },
+];
+
+const Intelligence: React.FC = () => {
+  const [data, setData] = useState<PaginatedResponse<IntelligenceItem>>({ items: [], total: 0, offset: 0, limit: 20 });
+  const [stats, setStats] = useState<IntelligenceStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [intelligences, setIntelligences] = useState<Intelligence[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<string | undefined>();
   const [threatFilter, setThreatFilter] = useState<string | undefined>();
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
-  const [selectedIntel, setSelectedIntel] = useState<Intelligence | null>(null);
-  const [detailVisible, setDetailVisible] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<IntelligenceItem | null>(null);
+  const [detailData, setDetailData] = useState<unknown>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [collectVisible, setCollectVisible] = useState(false);
-  const [collectLoading, setCollectLoading] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [collectForm] = Form.useForm();
+  const [form] = Form.useForm();
 
-  const fetchIntelligences = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(async () => {
     try {
-      const result = await intelligenceApi.getIntelligences({
-        query: searchQuery || undefined,
-        page,
-        page_size: pageSize,
-        filters: {
-          ...(sourceFilter ? { source_type: sourceFilter } : {}),
-          ...(threatFilter ? { threat_level: threatFilter } : {}),
-        },
+      setLoading(true);
+      const result = await intelligenceApi.list({
+        search: search || undefined,
+        source: sourceFilter,
+        threat_level: threatFilter,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
       });
-      setIntelligences(result.items);
-      setTotal(result.total);
+      setData(result);
     } catch (err) {
-      setError(extractErrorMessage(err));
-      setIntelligences([]);
-      setTotal(0);
+      message.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, sourceFilter, threatFilter, page, pageSize]);
+  }, [search, sourceFilter, threatFilter, page, pageSize]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const s = await intelligenceApi.getStats();
+      setStats(s);
+    } catch {
+      // ignore stats errors
+    }
+  }, []);
 
   useEffect(() => {
-    fetchIntelligences();
-  }, [fetchIntelligences]);
+    fetchData();
+  }, [fetchData]);
 
-  const handleSearch = () => {
-    setPage(1);
-    fetchIntelligences();
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  const handleCreate = async (values: { source: string; content: string; source_url?: string }) => {
+    try {
+      await intelligenceApi.create({
+        source: values.source,
+        content: values.content,
+        source_url: values.source_url,
+      });
+      message.success('情报创建成功');
+      setCreateModalOpen(false);
+      form.resetFields();
+      fetchData();
+      fetchStats();
+    } catch (err) {
+      message.error(getErrorMessage(err));
+    }
   };
 
-  const handleViewDetail = async (intel: Intelligence) => {
-    setDetailLoading(true);
-    setDetailVisible(true);
+  const handleDelete = async (id: string) => {
     try {
-      const detail = await intelligenceApi.getIntelDetail(intel.id);
-      setSelectedIntel(detail);
+      await intelligenceApi.delete(id);
+      message.success('删除成功');
+      fetchData();
+      fetchStats();
     } catch (err) {
-      message.warning('详情加载失败，显示基本信息');
-      setSelectedIntel(intel);
+      message.error(getErrorMessage(err));
+    }
+  };
+
+  const handleViewDetail = async (item: IntelligenceItem) => {
+    setSelectedItem(item);
+    setDetailModalOpen(true);
+    setDetailLoading(true);
+    try {
+      const detail = await intelligenceApi.get(item.id);
+      setDetailData(detail);
+    } catch (err) {
+      message.error(getErrorMessage(err));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const handleAnalyze = async (intel: Intelligence) => {
+  const handleStatusChange = async (id: string, status: string) => {
     try {
-      await intelligenceApi.batchAnalyze([intel.id]);
-      message.success('已提交分析任务');
+      await intelligenceApi.updateStatus(id, status);
+      message.success('状态更新成功');
+      fetchData();
     } catch (err) {
-      message.error(`提交失败: ${extractErrorMessage(err)}`);
+      message.error(getErrorMessage(err));
     }
   };
 
-  const handleAddToGraph = (intel: Intelligence) => {
-    message.info(`已将情报 ${intel.title} 加入图谱分析队列`);
-  };
-
-  const handleCollect = async (values: Record<string, unknown>) => {
-    setCollectLoading(true);
-    try {
-      await intelligenceApi.createIntel(values as Partial<Intelligence>);
-      message.success('情报采集任务已创建');
-      setCollectVisible(false);
-      collectForm.resetFields();
-      fetchIntelligences();
-    } catch (err) {
-      message.error(`创建失败: ${extractErrorMessage(err)}`);
-    } finally {
-      setCollectLoading(false);
-    }
-  };
-
-  const handleBatchAnalyze = async () => {
-    if (selectedIds.length === 0) {
-      message.warning('请先选择要分析的情报');
-      return;
-    }
-    try {
-      await intelligenceApi.batchAnalyze(selectedIds);
-      message.success(`已提交 ${selectedIds.length} 条情报的分析任务`);
-      setSelectedIds([]);
-    } catch (err) {
-      message.error(`批量分析失败: ${extractErrorMessage(err)}`);
-    }
-  };
-
-  const handleBatchClean = async () => {
-    if (selectedIds.length === 0) {
-      message.warning('请先选择要清洗的情报');
-      return;
-    }
-    try {
-      await intelligenceApi.batchClean(selectedIds);
-      message.success(`已提交 ${selectedIds.length} 条情报的清洗任务`);
-      setSelectedIds([]);
-    } catch (err) {
-      message.error(`批量清洗失败: ${extractErrorMessage(err)}`);
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
+  const columns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 100,
+      ellipsis: true,
+      render: (id: string) => <Text copyable={{ text: id }}>{id.substring(0, 8)}...</Text>,
+    },
+    {
+      title: '来源',
+      dataIndex: 'source',
+      key: 'source',
+      width: 100,
+      render: (source: string | null) => source ? <Tag>{source}</Tag> : <Text type="secondary">-</Text>,
+    },
+    {
+      title: '内容',
+      dataIndex: 'content',
+      key: 'content',
+      ellipsis: true,
+      render: (content: string) => (
+        <Tooltip title={content}>
+          <Text ellipsis style={{ maxWidth: 300 }}>{content}</Text>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '威胁等级',
+      dataIndex: 'threat_level',
+      key: 'threat_level',
+      width: 100,
+      render: (level: string | null) => {
+        if (!level) return <Text type="secondary">-</Text>;
+        const config = THREAT_LEVEL_CONFIG[level];
+        return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{level}</Tag>;
+      },
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 90,
+      render: (status: string) => {
+        const config = STATUS_CONFIG[status];
+        return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{status}</Tag>;
+      },
+    },
+    {
+      title: '类型',
+      dataIndex: 'type',
+      key: 'type',
+      width: 80,
+      render: (type: string) => <Tag>{type}</Tag>,
+    },
+    {
+      title: '收集时间',
+      dataIndex: 'collected_at',
+      key: 'collected_at',
+      width: 160,
+      render: (time: string | null) => time ? new Date(time).toLocaleString('zh-CN') : '-',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 160,
+      render: (_: unknown, record: IntelligenceItem) => (
+        <Space size="small">
+          <Tooltip title="查看详情">
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)} />
+          </Tooltip>
+          {record.status === 'raw' && (
+            <Tooltip title="标记为已清洗">
+              <Button type="link" size="small" onClick={() => handleStatusChange(record.id, 'cleaned')}>清洗</Button>
+            </Tooltip>
+          )}
+          {record.status === 'cleaned' && (
+            <Tooltip title="标记为已分析">
+              <Button type="link" size="small" onClick={() => handleStatusChange(record.id, 'analyzed')}>分析</Button>
+            </Tooltip>
+          )}
+          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <div>
-      <Card style={{ borderRadius: 8, marginBottom: 16 }} styles={{ body: { padding: '16px 20px' } }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col flex="auto">
-            <Space wrap size="middle">
-              <Input.Search
-                placeholder="搜索情报内容、标题、标签..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onSearch={handleSearch}
-                style={{ width: 320 }}
-                allowClear
-                enterButton={<SearchOutlined />}
-              />
-              <Select
-                placeholder="来源类型"
-                value={sourceFilter}
-                onChange={setSourceFilter}
-                options={sourceTypeOptions}
-                allowClear
-                style={{ width: 140 }}
-              />
-              <Select
-                placeholder="威胁等级"
-                value={threatFilter}
-                onChange={setThreatFilter}
-                options={threatLevelOptions}
-                allowClear
-                style={{ width: 120 }}
-              />
-              <RangePicker
-                value={dateRange}
-                onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
-                style={{ width: 260 }}
-              />
-            </Space>
-          </Col>
-          <Col>
-            <Space>
-              {selectedIds.length > 0 && (
-                <>
-                  <Button icon={<ExperimentOutlined />} onClick={handleBatchAnalyze}>
-                    批量分析 ({selectedIds.length})
-                  </Button>
-                  <Button icon={<ClearOutlined />} onClick={handleBatchClean}>
-                    批量清洗
-                  </Button>
-                </>
-              )}
-              <Button icon={<ReloadOutlined />} onClick={fetchIntelligences}>
-                刷新
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCollectVisible(true)}>
-                采集情报
-              </Button>
-            </Space>
-          </Col>
-        </Row>
+      <Card style={{ marginBottom: 16 }}>
+        <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space wrap>
+            <Input
+              placeholder="搜索情报内容..."
+              prefix={<SearchOutlined />}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              style={{ width: 250 }}
+              allowClear
+            />
+            <Select
+              placeholder="来源筛选"
+              value={sourceFilter}
+              onChange={(v) => { setSourceFilter(v); setPage(1); }}
+              options={SOURCE_OPTIONS}
+              allowClear
+              style={{ width: 130 }}
+            />
+            <Select
+              placeholder="威胁等级"
+              value={threatFilter}
+              onChange={(v) => { setThreatFilter(v); setPage(1); }}
+              options={THREAT_LEVEL_OPTIONS}
+              allowClear
+              style={{ width: 130 }}
+            />
+            <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
+          </Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+            新增情报
+          </Button>
+        </Space>
       </Card>
 
-      {error && (
-        <Alert
-          message="数据加载失败"
-          description={error}
-          type="error"
-          showIcon
-          closable
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={fetchIntelligences}>
-              重试
-            </Button>
-          }
-        />
+      {stats && (
+        <Card style={{ marginBottom: 16 }}>
+          <Space size="large">
+            <Text>总计: <Text strong>{stats.total}</Text></Text>
+            {Object.entries(stats.by_status).map(([status, count]) => (
+              <Text key={status}>
+                {STATUS_CONFIG[status]?.label || status}: <Text strong>{count}</Text>
+              </Text>
+            ))}
+          </Space>
+        </Card>
       )}
 
-      {loading && intelligences.length === 0 ? (
-        <div style={{ padding: '20px 0' }}>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} style={{ marginBottom: 12, borderRadius: 6 }}>
-              <Skeleton active paragraph={{ rows: 2 }} />
-            </Card>
-          ))}
-        </div>
-      ) : intelligences.length > 0 ? (
-        <Spin spinning={loading}>
-          {intelligences.map((intel) => (
-            <div key={intel.id} style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: 4, top: 20, zIndex: 1 }}>
-                <Checkbox
-                  checked={selectedIds.includes(intel.id)}
-                  onChange={() => toggleSelect(intel.id)}
-                />
-              </div>
-              <div style={{ marginLeft: 24 }}>
-                <IntelCard
-                  intel={intel}
-                  onViewDetail={handleViewDetail}
-                  onAnalyze={handleAnalyze}
-                  onAddToGraph={handleAddToGraph}
-                />
-              </div>
-            </div>
-          ))}
-          <div style={{ textAlign: 'center', marginTop: 16 }}>
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              showSizeChanger
-              showQuickJumper
-              showTotal={(t) => `共 ${t} 条情报`}
-              onChange={(p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-              }}
-            />
-          </div>
-        </Spin>
-      ) : (
-        <Empty description={error ? '数据加载失败' : '暂无情报数据'} />
-      )}
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={data.items}
+          rowKey="id"
+          loading={loading}
+          locale={{ emptyText: <Empty description="暂无情报数据" /> }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: data.total,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
+          scroll={{ x: 1000 }}
+        />
+      </Card>
 
       <Modal
-        title="情报详情"
-        open={detailVisible}
-        onCancel={() => setDetailVisible(false)}
-        width={720}
-        footer={[
-          <Button key="close" onClick={() => setDetailVisible(false)}>
-            关闭
-          </Button>,
-          <Button key="analyze" type="primary" icon={<ExperimentOutlined />} onClick={() => { if (selectedIntel) handleAnalyze(selectedIntel); }} disabled={!selectedIntel}>
-            深度分析
-          </Button>,
-        ]}
+        title="新增情报"
+        open={createModalOpen}
+        onCancel={() => { setCreateModalOpen(false); form.resetFields(); }}
+        onOk={() => form.submit()}
+        okText="创建"
+        cancelText="取消"
       >
-        {detailLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin size="large" tip="加载详情..." />
-          </div>
-        ) : selectedIntel ? (
-          <div>
-            <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="标题" span={2}>
-                <Text strong>{selectedIntel.title}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="来源">
-                {sourceTypeLabels[selectedIntel.source_type] || selectedIntel.source_type}
-              </Descriptions.Item>
-              <Descriptions.Item label="威胁等级">
-                <Tag color={
-                  selectedIntel.threat_level === 'critical' ? 'red' :
-                  selectedIntel.threat_level === 'high' ? 'orange' :
-                  selectedIntel.threat_level === 'medium' ? 'gold' :
-                  selectedIntel.threat_level === 'low' ? 'green' : 'blue'
-                }>
-                  {threatLevelLabels[selectedIntel.threat_level] || selectedIntel.threat_level}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="采集时间">
-                {dayjs(selectedIntel.collected_at).format('YYYY-MM-DD HH:mm:ss')}
-              </Descriptions.Item>
-              <Descriptions.Item label="处理状态">
-                {selectedIntel.is_processed ? <Tag color="green">已处理</Tag> : <Tag color="orange">待处理</Tag>}
-              </Descriptions.Item>
-            </Descriptions>
-            <Divider orientation="left">原始内容</Divider>
-            <Paragraph style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, fontSize: 13 }}>
-              {selectedIntel.content}
-            </Paragraph>
-            {selectedIntel.decoded_content && (
-              <>
-                <Divider orientation="left">解码内容</Divider>
-                <Paragraph style={{ background: '#e6f7ff', padding: 12, borderRadius: 4, fontSize: 13, borderLeft: '3px solid #1890ff' }}>
-                  {selectedIntel.decoded_content}
-                </Paragraph>
-              </>
-            )}
-            {selectedIntel.entities?.length > 0 && (
-              <>
-                <Divider orientation="left">关联实体</Divider>
-                <Space wrap>
-                  {selectedIntel.entities.map((entity) => (
-                    <Tag key={entity.id} color="processing">
-                      {entity.name} ({entity.entity_type})
-                    </Tag>
-                  ))}
-                </Space>
-              </>
-            )}
-          </div>
-        ) : null}
+        <Form form={form} layout="vertical" onFinish={handleCreate}>
+          <Form.Item name="source" label="来源" initialValue="other">
+            <Select options={SOURCE_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="content" label="内容" rules={[{ required: true, message: '请输入情报内容' }]}>
+            <Input.TextArea rows={4} placeholder="输入情报内容..." />
+          </Form.Item>
+          <Form.Item name="source_url" label="来源URL">
+            <Input placeholder="可选，情报来源链接" />
+          </Form.Item>
+        </Form>
       </Modal>
 
       <Modal
-        title="采集新情报"
-        open={collectVisible}
-        onCancel={() => setCollectVisible(false)}
-        onOk={() => collectForm.submit()}
-        confirmLoading={collectLoading}
-        width={600}
+        title="情报详情"
+        open={detailModalOpen}
+        onCancel={() => { setDetailModalOpen(false); setSelectedItem(null); setDetailData(null); }}
+        footer={null}
+        width={700}
       >
-        <Form form={collectForm} layout="vertical" onFinish={handleCollect}>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入情报标题' }]}>
-            <Input placeholder="输入情报标题" />
-          </Form.Item>
-          <Form.Item name="source" label="来源" rules={[{ required: true, message: '请输入情报来源' }]}>
-            <Input placeholder="输入情报来源" />
-          </Form.Item>
-          <Form.Item name="source_type" label="来源类型" rules={[{ required: true, message: '请选择来源类型' }]}>
-            <Select options={sourceTypeOptions} placeholder="选择来源类型" />
-          </Form.Item>
-          <Form.Item name="threat_level" label="威胁等级" initialValue="medium">
-            <Select options={threatLevelOptions} />
-          </Form.Item>
-          <Form.Item name="content" label="情报内容" rules={[{ required: true, message: '请输入情报内容' }]}>
-            <TextArea rows={6} placeholder="输入情报内容，支持粘贴原始黑话文本" />
-          </Form.Item>
-          <Form.Item name="tags" label="标签">
-            <Select mode="tags" placeholder="输入标签后回车" />
-          </Form.Item>
-        </Form>
+        {detailLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        ) : (
+          <div>
+            {selectedItem && (
+              <div style={{ marginBottom: 16 }}>
+                <Space>
+                  <Tag>{selectedItem.type}</Tag>
+                  {selectedItem.threat_level && THREAT_LEVEL_CONFIG[selectedItem.threat_level] && (
+                    <Tag color={THREAT_LEVEL_CONFIG[selectedItem.threat_level].color}>
+                      {THREAT_LEVEL_CONFIG[selectedItem.threat_level].label}
+                    </Tag>
+                  )}
+                  <Tag color={STATUS_CONFIG[selectedItem.status]?.color}>
+                    {STATUS_CONFIG[selectedItem.status]?.label || selectedItem.status}
+                  </Tag>
+                </Space>
+              </div>
+            )}
+            {detailData !== null && (
+              <Paragraph>
+                <pre style={{ maxHeight: 400, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+                  {JSON.stringify(detailData, null, 2)}
+                </pre>
+              </Paragraph>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
 };
 
-export default IntelligencePage;
+export default Intelligence;

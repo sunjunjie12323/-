@@ -1,352 +1,425 @@
-import axios from 'axios';
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import type {
-  Intelligence,
-  Entity,
-  PIR,
-  GraphData,
-  GraphStats,
-  BlackTalkTerm,
-  DecodeResult,
-  Report,
-  AgentStatus,
-  ExecutionRecord,
-  DashboardStats,
-  PaginatedResponse,
-  SearchParams,
-  User,
-  LoginRequest,
   LoginResponse,
-  RegisterRequest,
-  ChangePasswordRequest,
-  Task,
-  TaskListResponse,
-  ApiError,
+  DashboardStats,
+  IntelligenceItem,
+  IntelligenceDetail,
+  IntelligenceStats,
+  PaginatedResponse,
+  BlackTalkTerm,
+  BlackTalkDecodeResult,
+  BlackTalkStats,
+  GraphData,
+  GraphEntity,
+  GraphRelation,
+  GraphStats,
+  CommunityResult,
+  PathResult,
+  PIR,
+  PIRTask,
+  Report,
+  TaskStatus,
+  User,
 } from '../types';
 
-const TOKEN_KEY = 'threat_intel_token';
-const USER_KEY = 'threat_intel_user';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
-const api = axios.create({
-  baseURL: '/api/v1',
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+
+const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value: unknown) => void;
-  reject: (reason: unknown) => void;
-}> = [];
-
-const processQueue = (error: unknown) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(undefined);
-    }
-  });
-  failedQueue = [];
-};
-
-api.interceptors.request.use(
-  (config) => {
-    const token = getToken();
-    if (token) {
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem('access_token');
+    if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => Promise.reject(error),
+  (error) => Promise.reject(error)
 );
 
-api.interceptors.response.use(
+apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then(() => api(originalRequest));
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      const detail = (error.response.data as { detail?: string })?.detail;
+      if (detail?.includes('已被撤销') || detail?.includes('无效令牌')) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
       }
-      originalRequest._retry = true;
-      isRefreshing = true;
-      clearAuth();
-      processQueue(error);
-      isRefreshing = false;
-      window.location.href = '/login';
-      return Promise.reject(error);
     }
     return Promise.reject(error);
-  },
+  }
 );
 
-function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-function clearAuth(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-}
-
-function getStoredUser(): User | null {
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
+async function requestWithRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
   try {
-    return JSON.parse(raw) as User;
-  } catch {
-    return null;
+    return await fn();
+  } catch (error) {
+    if (retries > 0 && error instanceof AxiosError && !error.response) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      return requestWithRetry(fn, retries - 1);
+    }
+    throw error;
   }
 }
 
-function setStoredUser(user: User): void {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-}
-
-function extractErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as ApiError | undefined;
-    if (data?.error?.message) {
-      return data.error.message;
+function getErrorMessage(error: unknown): string {
+  if (error instanceof AxiosError) {
+    const data = error.response?.data as Record<string, unknown> | undefined;
+    if (data) {
+      if (typeof data.detail === 'string') return data.detail;
+      const errObj = data.error as Record<string, unknown> | undefined;
+      if (errObj && typeof errObj.message === 'string') return errObj.message;
     }
-    if (error.message === 'Network Error') {
-      return '网络连接失败，请检查网络或服务是否可用';
-    }
-    if (error.code === 'ECONNABORTED') {
-      return '请求超时，请稍后重试';
-    }
-    return error.message || '请求失败';
+    if (error.message) return error.message;
   }
-  if (error instanceof Error) {
-    return error.message;
-  }
+  if (error instanceof Error) return error.message;
   return '未知错误';
 }
 
+export { getErrorMessage };
+
 export const authApi = {
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
-    const { data: resp } = await api.post('/auth/login', data);
-    setToken(resp.access_token);
-    setStoredUser(resp.user);
-    return resp;
-  },
-
-  register: async (data: RegisterRequest): Promise<User> => {
-    const { data: resp } = await api.post('/auth/register', data);
-    return resp;
-  },
-
-  getMe: async (): Promise<User> => {
-    const { data: resp } = await api.get('/auth/me');
-    setStoredUser(resp);
-    return resp;
+  login: async (username: string, password: string): Promise<LoginResponse> => {
+    const { data } = await apiClient.post<LoginResponse>('/auth/login', { username, password });
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    return data;
   },
 
   logout: async (): Promise<void> => {
     try {
-      await api.post('/auth/logout');
-    } catch {
-      // ignore errors on logout
+      await apiClient.post('/auth/logout');
     } finally {
-      clearAuth();
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
     }
   },
 
-  changePassword: async (data: ChangePasswordRequest): Promise<void> => {
-    await api.put('/auth/password', data);
+  getMe: async (): Promise<User> => {
+    const { data } = await apiClient.get<User>('/auth/me');
+    return data;
   },
 
-  listUsers: async (): Promise<User[]> => {
-    const { data } = await api.get('/auth/users');
+  register: async (username: string, password: string, role: string = 'viewer'): Promise<User> => {
+    const { data } = await apiClient.post<User>('/auth/register', { username, password, role });
     return data;
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    await apiClient.put('/auth/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
   },
 };
 
-export const taskApi = {
-  getTasks: async (params?: { status?: string; offset?: number; limit?: number }): Promise<TaskListResponse> => {
-    const { data } = await api.get('/tasks', { params });
+export const dashboardApi = {
+  getStats: async (): Promise<DashboardStats> => {
+    return requestWithRetry(async () => {
+      const { data } = await apiClient.get<DashboardStats>('/dashboard/stats');
+      return data;
+    });
+  },
+
+  getRecentIntelligence: async (limit: number = 10): Promise<PaginatedResponse<IntelligenceItem>> => {
+    const { data } = await apiClient.get<PaginatedResponse<IntelligenceItem>>('/dashboard/recent', { params: { limit } });
     return data;
   },
 
-  getTask: async (taskId: string): Promise<Task> => {
-    const { data } = await api.get(`/tasks/${taskId}`);
+  getThreatDistribution: async (): Promise<{ threat_levels: Record<string, number>; entity_types: Record<string, number> }> => {
+    const { data } = await apiClient.get('/dashboard/threat-distribution');
     return data;
   },
 
-  cancelTask: async (taskId: string): Promise<void> => {
-    await api.post(`/tasks/${taskId}/cancel`);
-  },
-
-  getTaskResult: async (taskId: string): Promise<{ task_id: string; type: string; result: unknown; completed_at: string | null }> => {
-    const { data } = await api.get(`/tasks/${taskId}/result`);
+  getAgentStatus: async (): Promise<{ agents: unknown; recent_executions: unknown[] }> => {
+    const { data } = await apiClient.get('/dashboard/agent-status');
     return data;
-  },
-
-  waitForCompletion: async (taskId: string, intervalMs = 2000, maxAttempts = 60): Promise<Task> => {
-    for (let i = 0; i < maxAttempts; i++) {
-      const task = await taskApi.getTask(taskId);
-      if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
-        return task;
-      }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-    }
-    throw new Error('任务轮询超时');
   },
 };
 
 export const intelligenceApi = {
-  getIntelligences: async (params?: SearchParams): Promise<PaginatedResponse<Intelligence>> => {
-    const { data } = await api.get('/intelligence', { params });
+  list: async (params?: {
+    source?: string;
+    threat_level?: string;
+    status?: string;
+    search?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<IntelligenceItem>> => {
+    const { data } = await apiClient.get<PaginatedResponse<IntelligenceItem>>('/intelligence', { params });
     return data;
   },
-  getIntelDetail: async (id: string): Promise<Intelligence> => {
-    const { data } = await api.get(`/intelligence/${id}`);
+
+  get: async (id: string): Promise<IntelligenceDetail> => {
+    const { data } = await apiClient.get<IntelligenceDetail>(`/intelligence/${id}`);
     return data;
   },
-  createIntel: async (intel: Partial<Intelligence>): Promise<Intelligence> => {
-    const { data } = await api.post('/intelligence', intel);
+
+  create: async (intel: { source?: string; content: string; source_url?: string; metadata?: Record<string, unknown> }): Promise<IntelligenceItem> => {
+    const { data } = await apiClient.post<IntelligenceItem>('/intelligence', intel);
     return data;
   },
-  searchIntel: async (params: SearchParams): Promise<PaginatedResponse<Intelligence>> => {
-    const { data } = await api.post('/intelligence/search', params);
+
+  updateStatus: async (id: string, status: string): Promise<IntelligenceItem> => {
+    const { data } = await apiClient.patch<IntelligenceItem>(`/intelligence/${id}/status`, { status });
     return data;
   },
-  batchAnalyze: async (ids: string[]): Promise<void> => {
-    await api.post('/intelligence/batch-analyze', { ids });
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/intelligence/${id}`);
   },
-  batchClean: async (ids: string[]): Promise<void> => {
-    await api.post('/intelligence/batch-clean', { ids });
+
+  getStats: async (): Promise<IntelligenceStats> => {
+    const { data } = await apiClient.get<IntelligenceStats>('/intelligence/stats');
+    return data;
   },
 };
 
-export const entityApi = {
-  getEntities: async (params?: SearchParams): Promise<PaginatedResponse<Entity>> => {
-    const { data } = await api.get('/entities', { params });
+export const blacktalkApi = {
+  listTerms: async (params?: {
+    category?: string;
+    search?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<BlackTalkTerm>> => {
+    const { data } = await apiClient.get<PaginatedResponse<BlackTalkTerm>>('/blacktalk/terms', { params });
     return data;
   },
-  getEntityDetail: async (id: string): Promise<Entity> => {
-    const { data } = await api.get(`/entities/${id}`);
-    return data;
-  },
-  searchEntities: async (params: SearchParams): Promise<PaginatedResponse<Entity>> => {
-    const { data } = await api.post('/entities/search', params);
-    return data;
-  },
-};
 
-export const pirApi = {
-  getPIRs: async (params?: SearchParams): Promise<PaginatedResponse<PIR>> => {
-    const { data } = await api.get('/pirs', { params });
+  addTerm: async (term: string, meaning: string, context?: string, source?: string): Promise<BlackTalkTerm> => {
+    const { data } = await apiClient.post<BlackTalkTerm>('/blacktalk/terms', {
+      term,
+      meaning,
+      context: context || '',
+      source: source || 'manual',
+    });
     return data;
   },
-  createPIR: async (pir: Partial<PIR>): Promise<PIR> => {
-    const { data } = await api.post('/pirs', pir);
+
+  decode: async (text: string): Promise<BlackTalkDecodeResult> => {
+    const { data } = await apiClient.post<BlackTalkDecodeResult>('/blacktalk/decode', { text });
     return data;
   },
-  getPIRDetail: async (id: string): Promise<PIR> => {
-    const { data } = await api.get(`/pirs/${id}`);
+
+  search: async (q: string, n: number = 10): Promise<{ query: string; results: BlackTalkTerm[]; total: number }> => {
+    const { data } = await apiClient.get('/blacktalk/search', { params: { q, n } });
     return data;
   },
-  updatePIR: async (id: string, pir: Partial<PIR>): Promise<PIR> => {
-    const { data } = await api.put(`/pirs/${id}`, pir);
-    return data;
-  },
-  decomposePIR: async (id: string): Promise<PIR> => {
-    const { data } = await api.post(`/pirs/${id}/decompose`);
-    return data;
-  },
-  executePIR: async (id: string): Promise<ExecutionRecord> => {
-    const { data } = await api.post(`/pirs/${id}/execute`);
+
+  getStats: async (): Promise<BlackTalkStats> => {
+    const { data } = await apiClient.get<BlackTalkStats>('/blacktalk/stats');
     return data;
   },
 };
 
 export const graphApi = {
-  getGraphData: async (params?: { entity_id?: string; depth?: number }): Promise<GraphData> => {
-    const { data } = await api.get('/graph', { params });
+  getData: async (params?: {
+    entity_type?: string;
+    search?: string;
+    depth?: number;
+  }): Promise<GraphData> => {
+    const { data } = await apiClient.get<GraphData>('/graph/data', { params });
     return data;
   },
-  getEntityRelations: async (entityId: string): Promise<GraphData> => {
-    const { data } = await api.get(`/graph/entity/${entityId}`);
+
+  getStats: async (): Promise<GraphStats> => {
+    const { data } = await apiClient.get<GraphStats>('/graph/stats');
     return data;
   },
-  findPath: async (sourceId: string, targetId: string): Promise<GraphData> => {
-    const { data } = await api.get('/graph/path', { params: { source: sourceId, target: targetId } });
+
+  listEntities: async (params?: {
+    entity_type?: string;
+    search?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<GraphEntity>> => {
+    const { data } = await apiClient.get<PaginatedResponse<GraphEntity>>('/graph/entities', { params });
     return data;
   },
-  findCommunities: async (): Promise<GraphData> => {
-    const { data } = await api.post('/graph/communities');
+
+  getEntity: async (entityId: string): Promise<{ entity: GraphEntity; relations: GraphRelation[]; relation_count: number }> => {
+    const { data } = await apiClient.get(`/graph/entities/${entityId}`);
     return data;
   },
-  getGraphStats: async (): Promise<GraphStats> => {
-    const { data } = await api.get('/graph/stats');
+
+  addEntity: async (type: string, value: string, context?: string, confidence?: number): Promise<{ id: string }> => {
+    const { data } = await apiClient.post('/graph/entities', { type, value, context, confidence });
+    return data;
+  },
+
+  addRelation: async (sourceEntityId: string, targetEntityId: string, type: string, confidence?: number, evidence?: string): Promise<{ id: string }> => {
+    const { data } = await apiClient.post('/graph/relations', {
+      source_entity_id: sourceEntityId,
+      target_entity_id: targetEntityId,
+      type,
+      confidence,
+      evidence,
+    });
+    return data;
+  },
+
+  findPath: async (sourceId: string, targetId: string, maxDepth: number = 5): Promise<PathResult> => {
+    const { data } = await apiClient.post<PathResult>('/graph/path', {
+      source_id: sourceId,
+      target_id: targetId,
+      max_depth: maxDepth,
+    });
+    return data;
+  },
+
+  findCommunities: async (algorithm: string = 'louvain', minSize: number = 2): Promise<CommunityResult> => {
+    const { data } = await apiClient.post<CommunityResult>('/graph/communities', {
+      algorithm,
+      min_size: minSize,
+    });
+    return data;
+  },
+
+  getSubgraph: async (entityId: string, depth: number = 1): Promise<GraphData> => {
+    const { data } = await apiClient.get<GraphData>(`/graph/subgraph/${entityId}`, { params: { depth } });
     return data;
   },
 };
 
-export const blackTalkApi = {
-  getBlackTalkTerms: async (params?: SearchParams): Promise<PaginatedResponse<BlackTalkTerm>> => {
-    const { data } = await api.get('/blacktalk', { params });
+export const pirsApi = {
+  list: async (params?: {
+    status?: string;
+    priority?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<PIR>> => {
+    const { data } = await apiClient.get<PaginatedResponse<PIR>>('/pirs', { params });
     return data;
   },
-  searchBlackTalk: async (query: string): Promise<BlackTalkTerm[]> => {
-    const { data } = await api.get('/blacktalk/search', { params: { query } });
+
+  get: async (pirId: string): Promise<PIR> => {
+    const { data } = await apiClient.get<PIR>(`/pirs/${pirId}`);
     return data;
   },
-  addBlackTalkTerm: async (term: Partial<BlackTalkTerm>): Promise<BlackTalkTerm> => {
-    const { data } = await api.post('/blacktalk', term);
+
+  create: async (pir: {
+    title: string;
+    description?: string;
+    priority?: string;
+    keywords?: string[];
+    target_sources?: string[];
+  }): Promise<PIR> => {
+    const { data } = await apiClient.post<PIR>('/pirs', pir);
     return data;
   },
-  decodeText: async (text: string): Promise<DecodeResult> => {
-    const { data } = await api.post('/blacktalk/decode', { text });
+
+  update: async (pirId: string, updates: Partial<PIR>): Promise<PIR> => {
+    const { data } = await apiClient.patch<PIR>(`/pirs/${pirId}`, updates);
+    return data;
+  },
+
+  delete: async (pirId: string): Promise<void> => {
+    await apiClient.delete(`/pirs/${pirId}`);
+  },
+
+  decompose: async (pirId: string): Promise<{ pir_id: string; tasks: PIRTask[]; task_count: number }> => {
+    const { data } = await apiClient.post(`/pirs/${pirId}/decompose`);
+    return data;
+  },
+
+  execute: async (pirId: string): Promise<{ task_id: string; pir_id: string; status: string }> => {
+    const { data } = await apiClient.post(`/pirs/${pirId}/execute`);
+    return data;
+  },
+
+  listTasks: async (pirId: string): Promise<PIRTask[]> => {
+    const { data } = await apiClient.get(`/pirs/${pirId}/tasks`);
     return data;
   },
 };
 
-export const reportApi = {
-  getReports: async (params?: SearchParams): Promise<PaginatedResponse<Report>> => {
-    const { data } = await api.get('/reports', { params });
+export const reportsApi = {
+  list: async (params?: {
+    report_type?: string;
+    status?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<Report>> => {
+    const { data } = await apiClient.get<PaginatedResponse<Report>>('/reports', { params });
     return data;
   },
-  getReportDetail: async (id: string): Promise<Report> => {
-    const { data } = await api.get(`/reports/${id}`);
+
+  get: async (reportId: string): Promise<Report> => {
+    const { data } = await apiClient.get<Report>(`/reports/${reportId}`);
     return data;
   },
-  generateReport: async (pirId: string): Promise<Report> => {
-    const { data } = await api.post('/reports/generate', { pir_id: pirId });
+
+  generate: async (params: {
+    title: string;
+    report_type?: string;
+    pir_ids?: string[];
+    intelligence_ids?: string[];
+    context?: string;
+  }): Promise<Report> => {
+    const { data } = await apiClient.post<Report>('/reports/generate', params);
+    return data;
+  },
+
+  update: async (reportId: string, updates: Partial<Report>): Promise<Report> => {
+    const { data } = await apiClient.patch<Report>(`/reports/${reportId}`, updates);
+    return data;
+  },
+
+  delete: async (reportId: string): Promise<void> => {
+    await apiClient.delete(`/reports/${reportId}`);
+  },
+
+  export: async (reportId: string, format: string = 'markdown'): Promise<{ report_id: string; title: string; format: string; content: string }> => {
+    const { data } = await apiClient.post(`/reports/${reportId}/export`, null, { params: { format } });
     return data;
   },
 };
 
 export const agentApi = {
-  executeQuery: async (query: string): Promise<ExecutionRecord> => {
-    const { data } = await api.post('/agent/execute', { query });
+  submitQuery: async (query: string, context?: Record<string, unknown>, maxIterations?: number): Promise<TaskStatus> => {
+    const { data } = await apiClient.post<TaskStatus>('/agent/query', {
+      query,
+      context,
+      max_iterations: maxIterations,
+    });
     return data;
   },
-  getAgentStatus: async (): Promise<AgentStatus[]> => {
-    const { data } = await api.get('/agent/status');
+
+  getStatus: async (): Promise<{ agents: unknown }> => {
+    const { data } = await apiClient.get('/agent/status');
     return data;
   },
-  getExecutionHistory: async (params?: SearchParams): Promise<PaginatedResponse<ExecutionRecord>> => {
-    const { data } = await api.get('/agent/history', { params });
+
+  getHistory: async (limit: number = 20): Promise<{ items: unknown[]; total: number }> => {
+    const { data } = await apiClient.get('/agent/history', { params: { limit } });
+    return data;
+  },
+
+  getExecution: async (executionId: string): Promise<Record<string, unknown>> => {
+    const { data } = await apiClient.get(`/agent/execution/${executionId}`);
+    return data;
+  },
+
+  triggerCollection: async (): Promise<TaskStatus> => {
+    const { data } = await apiClient.post<TaskStatus>('/agent/collect');
+    return data;
+  },
+
+  triggerAnalysis: async (): Promise<TaskStatus> => {
+    const { data } = await apiClient.post<TaskStatus>('/agent/analyze');
     return data;
   },
 };
 
-export const dashboardApi = {
-  getDashboardStats: async (): Promise<DashboardStats> => {
-    const { data } = await api.get('/dashboard/stats');
-    return data;
-  },
-};
-
-export { getToken, setToken, clearAuth, getStoredUser, setStoredUser, extractErrorMessage };
-export default api;
+export default apiClient;

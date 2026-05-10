@@ -10,7 +10,7 @@ import {
   ApartmentOutlined,
   MoreOutlined,
 } from '@ant-design/icons';
-import type { Intelligence } from '../types';
+import type { IntelligenceItem } from '../types';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
@@ -45,14 +45,14 @@ const sourceTypeLabels: Record<string, string> = {
 };
 
 interface IntelCardProps {
-  intel: Intelligence;
-  onViewDetail?: (intel: Intelligence) => void;
-  onAnalyze?: (intel: Intelligence) => void;
-  onAddToGraph?: (intel: Intelligence) => void;
+  intel: IntelligenceItem;
+  onViewDetail?: (intel: IntelligenceItem) => void;
+  onAnalyze?: (intel: IntelligenceItem) => void;
+  onAddToGraph?: (intel: IntelligenceItem) => void;
 }
 
 const IntelCard: React.FC<IntelCardProps> = ({ intel, onViewDetail, onAnalyze, onAddToGraph }) => {
-  const threatConfig = threatLevelConfig[intel.threat_level] || threatLevelConfig.info;
+  const threatConfig = threatLevelConfig[intel.threat_level || ''] || threatLevelConfig.info;
 
   const dropdownItems = [
     {
@@ -75,6 +75,8 @@ const IntelCard: React.FC<IntelCardProps> = ({ intel, onViewDetail, onAnalyze, o
     },
   ];
 
+  const sourceType = intel.source || 'other';
+
   return (
     <Card
       hoverable
@@ -93,45 +95,39 @@ const IntelCard: React.FC<IntelCardProps> = ({ intel, onViewDetail, onAnalyze, o
               text={<Text style={{ color: threatConfig.color, fontWeight: 600, fontSize: 13 }}>{threatConfig.label}</Text>}
             />
             <Tag
-              icon={sourceTypeIcons[intel.source_type]}
+              icon={sourceTypeIcons[sourceType]}
               color="default"
               style={{ margin: 0, fontSize: 12 }}
             >
-              {sourceTypeLabels[intel.source_type] || intel.source_type}
+              {sourceTypeLabels[sourceType] || sourceType}
             </Tag>
-            {intel.is_processed && (
-              <Tag color="green" style={{ margin: 0, fontSize: 12 }}>
-                已处理
-              </Tag>
-            )}
+            <Tag color={intel.status === 'analyzed' ? 'green' : intel.status === 'cleaned' ? 'blue' : 'default'} style={{ margin: 0, fontSize: 12 }}>
+              {intel.status === 'analyzed' ? '已分析' : intel.status === 'cleaned' ? '已清洗' : '原始'}
+            </Tag>
           </Space>
           <Paragraph
             strong
             ellipsis={{ rows: 1 }}
             style={{ marginBottom: 6, fontSize: 15 }}
           >
-            {intel.title}
+            {intel.content?.substring(0, 80) || '未命名'}
           </Paragraph>
           <Paragraph
             type="secondary"
             ellipsis={{ rows: 2 }}
             style={{ marginBottom: 8, fontSize: 13 }}
           >
-            {intel.decoded_content || intel.content}
+            {intel.content}
           </Paragraph>
           <Space size={4} wrap>
-            {intel.entities?.slice(0, 4).map((entity) => (
-              <Tag
-                key={entity.id}
-                style={{ fontSize: 11, margin: 0 }}
-                color="processing"
-              >
-                {entity.name}
+            {intel.entities_count > 0 && (
+              <Tag style={{ fontSize: 11, margin: 0 }} color="processing">
+                {intel.entities_count} 个实体
               </Tag>
-            ))}
-            {intel.entities?.length > 4 && (
-              <Tag style={{ fontSize: 11, margin: 0 }}>
-                +{intel.entities.length - 4}
+            )}
+            {intel.blacktalk_count > 0 && (
+              <Tag style={{ fontSize: 11, margin: 0 }} color="orange">
+                {intel.blacktalk_count} 个黑话
               </Tag>
             )}
           </Space>
@@ -140,12 +136,14 @@ const IntelCard: React.FC<IntelCardProps> = ({ intel, onViewDetail, onAnalyze, o
           <Dropdown menu={{ items: dropdownItems }} trigger={['click']}>
             <MoreOutlined style={{ cursor: 'pointer', fontSize: 18, color: '#999' }} />
           </Dropdown>
-          <Tooltip title={dayjs(intel.collected_at).format('YYYY-MM-DD HH:mm:ss')}>
-            <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-              <ClockCircleOutlined style={{ marginRight: 4 }} />
-              {dayjs(intel.collected_at).fromNow()}
-            </Text>
-          </Tooltip>
+          {intel.collected_at && (
+            <Tooltip title={dayjs(intel.collected_at).format('YYYY-MM-DD HH:mm:ss')}>
+              <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                <ClockCircleOutlined style={{ marginRight: 4 }} />
+                {dayjs(intel.collected_at).fromNow()}
+              </Text>
+            </Tooltip>
+          )}
         </div>
       </div>
     </Card>

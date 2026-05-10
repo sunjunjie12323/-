@@ -76,7 +76,7 @@ async def get_term(
     engine = get_blacktalk_engine(request)
     term = engine._dictionary.get(term_id)
     if term is None:
-        raise HTTPException(status_code=404, detail="Black talk term not found")
+        raise HTTPException(status_code=404, detail="黑话术语未找到")
     return term.to_dict()
 
 
@@ -106,6 +106,15 @@ async def decode_text(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
+    if not data.text.strip():
+        return {
+            "original_text": data.text,
+            "decoded_text": data.text,
+            "decoded_terms": [],
+            "terms_found": 0,
+            "auto_learned": [],
+        }
+
     engine = get_blacktalk_engine(request)
     try:
         decoded_text, decoded_terms = await engine.decode(data.text)
@@ -116,12 +125,25 @@ async def decode_text(
                 auto_learned = [t.to_dict() for t in learned]
             except Exception as exc:
                 logger.warning(f"Auto-learn during decode failed: {exc}")
+
+        found_terms = []
+        for dt in decoded_terms:
+            if isinstance(dt, dict):
+                found_terms.append(dt)
+            else:
+                found_terms.append({
+                    "term": getattr(dt, "term", str(dt)),
+                    "meaning": getattr(dt, "meaning", ""),
+                    "position": getattr(dt, "position", [0, 0]),
+                })
+
         return {
             "original_text": data.text,
             "decoded_text": decoded_text,
             "decoded_terms": decoded_terms,
             "terms_found": len(decoded_terms),
             "auto_learned": auto_learned,
+            "found_terms": found_terms,
         }
     except Exception as exc:
         logger.error(f"Failed to decode text: {exc}")

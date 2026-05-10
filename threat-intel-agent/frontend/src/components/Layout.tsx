@@ -1,77 +1,115 @@
 import React, { useState, useEffect } from 'react';
-import { Layout as AntLayout, Menu, Avatar, Dropdown, Badge, Tag, Space, Typography } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Typography, Tag, Space, theme } from 'antd';
 import {
   DashboardOutlined,
-  SearchOutlined,
-  ApartmentOutlined,
-  AimOutlined,
-  MessageOutlined,
+  DatabaseOutlined,
+  NodeIndexOutlined,
+  TranslationOutlined,
+  FileSearchOutlined,
   FileTextOutlined,
-  UserOutlined,
+  RobotOutlined,
   LogoutOutlined,
-  WifiOutlined,
-  DisconnectOutlined,
-  SyncOutlined,
+  UserOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { authApi, taskApi, getStoredUser, getToken } from '../services/api';
-import type { User, Task } from '../types';
+import { authApi } from '../services/api';
+import type { User } from '../types';
 
-const { Header, Sider, Content } = AntLayout;
+const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
-
-const menuItems = [
-  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/intelligence', icon: <SearchOutlined />, label: '情报中心' },
-  { key: '/graph', icon: <ApartmentOutlined />, label: '关系图谱' },
-  { key: '/pir', icon: <AimOutlined />, label: 'PIR管理' },
-  { key: '/blacktalk', icon: <MessageOutlined />, label: '黑话解码' },
-  { key: '/reports', icon: <FileTextOutlined />, label: '分析报告' },
-];
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const AppLayout: React.FC<LayoutProps> = ({ children }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [connected, setConnected] = useState(true);
-  const [runningTasks, setRunningTasks] = useState(0);
+  const { token: themeToken } = theme.useToken();
 
   useEffect(() => {
-    const user = getStoredUser();
-    setCurrentUser(user);
-    setConnected(!!getToken());
-  }, []);
-
-  useEffect(() => {
-    const checkTasks = async () => {
+    const stored = localStorage.getItem('user');
+    if (stored) {
       try {
-        const result = await taskApi.getTasks({ status: 'running', limit: 1 });
-        setRunningTasks(result.total);
-        setConnected(true);
+        setUser(JSON.parse(stored));
       } catch {
-        setConnected(false);
+        localStorage.removeItem('user');
       }
-    };
-    checkTasks();
-    const interval = setInterval(checkTasks, 15000);
-    return () => clearInterval(interval);
+    }
   }, []);
 
   const handleLogout = async () => {
-    await authApi.logout();
-    navigate('/login', { replace: true });
+    try {
+      await authApi.logout();
+    } catch {
+      // ignore logout errors
+    }
+    setUser(null);
+    navigate('/login');
+  };
+
+  const menuItems = [
+    {
+      key: '/',
+      icon: <DashboardOutlined />,
+      label: '仪表盘',
+    },
+    {
+      key: '/intelligence',
+      icon: <DatabaseOutlined />,
+      label: '情报管理',
+    },
+    {
+      key: '/graph',
+      icon: <NodeIndexOutlined />,
+      label: '知识图谱',
+    },
+    {
+      key: '/blacktalk',
+      icon: <TranslationOutlined />,
+      label: '黑话解码',
+    },
+    {
+      key: '/pirs',
+      icon: <FileSearchOutlined />,
+      label: 'PIR管理',
+    },
+    {
+      key: '/reports',
+      icon: <FileTextOutlined />,
+      label: '报告中心',
+    },
+    {
+      key: '/agent',
+      icon: <RobotOutlined />,
+      label: 'Agent',
+    },
+  ];
+
+  const roleLabels: Record<string, { color: string; label: string }> = {
+    admin: { color: 'red', label: '管理员' },
+    analyst: { color: 'blue', label: '分析师' },
+    viewer: { color: 'green', label: '观察者' },
   };
 
   const userMenuItems = [
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: `${currentUser?.username || '用户'} (${currentUser?.role === 'admin' ? '管理员' : currentUser?.role === 'analyst' ? '分析师' : '观察者'})`,
+      label: user?.username || '用户',
+      disabled: true,
+    },
+    {
+      key: 'role',
+      icon: <SettingOutlined />,
+      label: (
+        <span>
+          角色: {user?.role ? <Tag color={roleLabels[user.role]?.color}>{roleLabels[user.role]?.label || user.role}</Tag> : '-'}
+        </span>
+      ),
       disabled: true,
     },
     { type: 'divider' as const },
@@ -79,17 +117,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: '退出登录',
-      onClick: handleLogout,
+      danger: true,
     },
   ];
 
+  const handleMenuClick = (info: { key: string }) => {
+    navigate(info.key);
+  };
+
+  const handleUserMenuClick = (info: { key: string }) => {
+    if (info.key === 'logout') {
+      handleLogout();
+    }
+  };
+
+  const selectedKey = menuItems.find((item) => {
+    if (item.key === '/') return location.pathname === '/';
+    return location.pathname.startsWith(item.key);
+  })?.key || '/';
+
   return (
-    <AntLayout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh' }}>
       <Sider
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
-        theme="dark"
         style={{
           overflow: 'auto',
           height: '100vh',
@@ -97,91 +149,70 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           left: 0,
           top: 0,
           bottom: 0,
-          zIndex: 10,
         }}
       >
-        <div
-          style={{
-            height: 48,
-            margin: 12,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(255,255,255,0.1)',
-            borderRadius: 6,
-          }}
-        >
-          <Text
-            strong
-            style={{
-              color: '#fff',
-              fontSize: collapsed ? 14 : 16,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            }}
-          >
-            {collapsed ? '黑灰' : '黑灰产情报分析'}
-          </Text>
+        <div style={{
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 16px',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+        }}>
+          <RobotOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+          {!collapsed && (
+            <Text strong style={{ color: '#fff', marginLeft: 8, whiteSpace: 'nowrap', fontSize: 14 }}>
+              情报分析系统
+            </Text>
+          )}
         </div>
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[selectedKey]}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={handleMenuClick}
         />
       </Sider>
-      <AntLayout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
-        <Header
-          style={{
-            padding: '0 24px',
-            background: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 9,
-          }}
-        >
-          <Space size="large">
-            <Space size="small">
-              {connected ? (
-                <Tag icon={<WifiOutlined />} color="success" style={{ margin: 0 }}>
-                  已连接
-                </Tag>
-              ) : (
-                <Tag icon={<DisconnectOutlined />} color="error" style={{ margin: 0 }}>
-                  未连接
+      <Layout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
+        <Header style={{
+          padding: '0 24px',
+          background: themeToken.colorBgContainer,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        }}>
+          <Dropdown
+            menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
+            placement="bottomRight"
+          >
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }} />
+              <Text>{user?.username || '未登录'}</Text>
+              {user?.role && (
+                <Tag color={roleLabels[user.role]?.color} style={{ marginLeft: 4 }}>
+                  {roleLabels[user.role]?.label || user.role}
                 </Tag>
               )}
             </Space>
-            {runningTasks > 0 && (
-              <Badge count={runningTasks} size="small" offset={[2, 0]}>
-                <Tag icon={<SyncOutlined spin />} color="processing" style={{ margin: 0 }}>
-                  执行中
-                </Tag>
-              </Badge>
-            )}
-          </Space>
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <Space style={{ cursor: 'pointer' }}>
-              <Avatar
-                size="small"
-                icon={<UserOutlined />}
-                style={{ backgroundColor: currentUser?.role === 'admin' ? '#f5222d' : currentUser?.role === 'analyst' ? '#1890ff' : '#52c41a' }}
-              />
-              <Text style={{ fontSize: 13 }}>{currentUser?.username || '未登录'}</Text>
-            </Space>
           </Dropdown>
         </Header>
-        <Content style={{ margin: 16, padding: 20, background: '#f5f5f5', minHeight: 'auto', borderRadius: 8 }}>
+        <Content style={{
+          margin: 24,
+          padding: 24,
+          background: themeToken.colorBgContainer,
+          borderRadius: themeToken.borderRadiusLG,
+          minHeight: 280,
+        }}>
           {children}
         </Content>
-      </AntLayout>
-    </AntLayout>
+      </Layout>
+    </Layout>
   );
 };
 
-export default Layout;
+export default AppLayout;

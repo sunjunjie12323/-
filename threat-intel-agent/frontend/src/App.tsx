@@ -10,7 +10,9 @@ import PIRManager from './pages/PIRManager';
 import BlackTalk from './pages/BlackTalk';
 import Reports from './pages/Reports';
 import Login from './pages/Login';
-import { getToken } from './services/api';
+import AgentPage from './pages/Agent';
+
+const getToken = (): string | null => localStorage.getItem('access_token');
 
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = getToken();
@@ -45,7 +47,7 @@ const App: React.FC = () => {
             path="/login"
             element={
               <LoginGuard>
-                <Login />
+                <Login onLoginSuccess={() => window.location.href = '/'} />
               </LoginGuard>
             }
           />
@@ -74,7 +76,7 @@ const App: React.FC = () => {
             }
           />
           <Route
-            path="/pir"
+            path="/pirs"
             element={
               <AuthGuard>
                 <PIRManager />
@@ -94,6 +96,14 @@ const App: React.FC = () => {
             element={
               <AuthGuard>
                 <Reports />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/agent"
+            element={
+              <AuthGuard>
+                <AgentPage />
               </AuthGuard>
             }
           />
