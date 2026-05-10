@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Tag, Button, Space, Modal, Form, Input, Select, message,
-  Empty, Spin, Typography, Popconfirm, Tooltip,
+  Empty, Spin, Typography, Tooltip,
 } from 'antd';
 import {
   PlusOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined,
   FileTextOutlined, DownloadOutlined,
 } from '@ant-design/icons';
-import { reportsApi, getErrorMessage } from '../services/api';
-import type { Report, PaginatedResponse } from '../types';
+import { reportsApi, pirsApi, getErrorMessage } from '../services/api';
+import type { Report, PIR, PaginatedResponse } from '../types';
+import { formatTime } from '../utils/constants';
 
 const { Text, Paragraph } = Typography;
 
@@ -36,6 +37,7 @@ const Reports: React.FC = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [pirOptions, setPirOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [form] = Form.useForm();
 
   const fetchReports = useCallback(async () => {
@@ -58,11 +60,25 @@ const Reports: React.FC = () => {
     fetchReports();
   }, [fetchReports]);
 
-  const handleGenerate = async (values: { title: string; report_type?: string }) => {
+  const fetchPirOptions = useCallback(async () => {
+    try {
+      const result = await pirsApi.list({ limit: 100 });
+      setPirOptions(result.items.map((pir: PIR) => ({ value: pir.id, label: pir.title })));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPirOptions();
+  }, [fetchPirOptions]);
+
+  const handleGenerate = async (values: { title: string; report_type?: string; pir_ids?: string[] }) => {
     try {
       await reportsApi.generate({
         title: values.title,
         report_type: values.report_type || 'threat_summary',
+        pir_ids: values.pir_ids,
       });
       message.success('报告生成任务已提交');
       setGenerateModalOpen(false);
@@ -73,14 +89,23 @@ const Reports: React.FC = () => {
     }
   };
 
-  const handleDelete = async (reportId: string) => {
-    try {
-      await reportsApi.delete(reportId);
-      message.success('删除成功');
-      fetchReports();
-    } catch (err) {
-      message.error(getErrorMessage(err));
-    }
+  const handleDelete = (reportId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除这份报告吗？此操作不可恢复。',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await reportsApi.delete(reportId);
+          message.success('报告已删除');
+          fetchReports();
+        } catch (err) {
+          message.error(getErrorMessage(err));
+        }
+      },
+    });
   };
 
   const handleViewDetail = async (reportId: string) => {
@@ -145,7 +170,7 @@ const Reports: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 160,
-      render: (time: string | undefined) => time ? new Date(time).toLocaleString('zh-CN') : '-',
+      render: (time: string | undefined) => time ? <Tooltip title={formatTime(time)}><Text>{formatTime(time)}</Text></Tooltip> : '—',
     },
     {
       title: '操作',
@@ -161,9 +186,9 @@ const Reports: React.FC = () => {
               <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleExport(record.id)} />
             </Tooltip>
           )}
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Tooltip title="删除">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
+          </Tooltip>
         </Space>
       ),
     },
@@ -196,7 +221,7 @@ const Reports: React.FC = () => {
           dataSource={reports.items}
           rowKey="id"
           loading={loading}
-          locale={{ emptyText: <Empty description="暂无报告数据" /> }}
+          locale={{ emptyText: <Empty description="暂无分析报告，执行PIR后可生成报告" /> }}
           pagination={{
             current: page,
             pageSize,
@@ -222,6 +247,18 @@ const Reports: React.FC = () => {
           </Form.Item>
           <Form.Item name="report_type" label="报告类型" initialValue="threat_summary">
             <Select options={Object.entries(REPORT_TYPE_CONFIG).map(([value, config]) => ({ value, label: config.label }))} />
+          </Form.Item>
+          <Form.Item
+            name="pir_ids"
+            label="关联PIR"
+            rules={[{ required: true, message: '请选择至少一个PIR' }]}
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择关联的PIR"
+              options={pirOptions}
+              allowClear
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -253,6 +290,10 @@ const Reports: React.FC = () => {
             </div>
 
             <Paragraph><Text strong>标题: </Text>{selectedReport.title}</Paragraph>
+
+            {selectedReport.created_at && (
+              <Paragraph><Text strong>创建时间: </Text>{formatTime(selectedReport.created_at)}</Paragraph>
+            )}
 
             {selectedReport.content ? (
               <div>

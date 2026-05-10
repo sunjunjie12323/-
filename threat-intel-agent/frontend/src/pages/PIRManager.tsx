@@ -1,23 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Card, Table, Tag, Button, Space, Modal, Form, Input, Select, message,
-  Empty, Spin, Typography, Popconfirm, Progress, List, Badge, Tooltip,
+  Empty, Spin, Typography, Progress, List, Badge, Tooltip,
 } from 'antd';
 import {
   PlusOutlined, ReloadOutlined, DeleteOutlined, PlayCircleOutlined,
   ScissorOutlined, EyeOutlined, CheckCircleOutlined, ClockCircleOutlined,
   ExclamationCircleOutlined, SyncOutlined,
 } from '@ant-design/icons';
-import { pirsApi, getErrorMessage } from '../services/api';
-import type { PIR, PIRTask, PaginatedResponse } from '../types';
+import { pirsApi, agentApi, getErrorMessage } from '../services/api';
+import type { PIR, PIRTask, PaginatedResponse, TaskStatus } from '../types';
+import { formatTime } from '../utils/constants';
 
 const { Text, Paragraph } = Typography;
 
 const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
   critical: { color: '#cf1322', label: '紧急' },
-  high: { color: '#d4380d', label: '高' },
-  medium: { color: '#d48806', label: '中' },
-  low: { color: '#389e0d', label: '低' },
+  high: { color: '#fa541c', label: '高' },
+  medium: { color: '#fa8c16', label: '中' },
+  low: { color: '#52c41a', label: '低' },
 };
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
@@ -35,6 +36,22 @@ const TASK_STATUS_CONFIG: Record<string, { color: string; label: string; icon: R
   failed: { color: 'error', label: '失败', icon: <ExclamationCircleOutlined /> },
 };
 
+const STEP_LABELS: Record<string, string> = {
+  collecting: '情报采集中',
+  cleaning: '数据清洗中',
+  analyzing: '分析处理中',
+  building_graph: '构建图谱中',
+  generating_report: '生成报告中',
+};
+
+const STEP_ORDER = ['collecting', 'cleaning', 'analyzing', 'building_graph', 'generating_report'];
+
+function getStepProgress(currentStep: string): number {
+  const idx = STEP_ORDER.indexOf(currentStep);
+  if (idx < 0) return 0;
+  return Math.round(((idx + 1) / STEP_ORDER.length) * 100);
+}
+
 const PIRManager: React.FC = () => {
   const [pirs, setPirs] = useState<PaginatedResponse<PIR>>({ items: [], total: 0, offset: 0, limit: 20 });
   const [loading, setLoading] = useState(false);
@@ -46,6 +63,9 @@ const PIRManager: React.FC = () => {
   const [selectedPir, setSelectedPir] = useState<PIR | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [form] = Form.useForm();
+  const [executingPirId, setExecutingPirId] = useState<string | null>(null);
+  const [executionProgress, setExecutionProgress] = useState<TaskStatus | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchPirs = useCallback(async () => {
     try {
@@ -67,6 +87,39 @@ const PIRManager: React.FC = () => {
     fetchPirs();
   }, [fetchPirs]);
 
+  useEffect(() => {
+    if (!executingPirId) return;
+    const poll = async () => {
+      try {
+        const stored = sessionStorage.getItem('tia_active_tasks');
+        const taskIds: string[] = stored ? JSON.parse(stored) : [];
+        const lastTaskId = taskIds[taskIds.length - 1];
+        if (!lastTaskId) return;
+        const status = await agentApi.getTaskStatus(lastTaskId);
+        setExecutionProgress(status);
+        if (status.status === 'completed') {
+          message.success('PIR执行完成');
+          setExecutingPirId(null);
+          setExecutionProgress(null);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          fetchPirs();
+        } else if (status.status === 'failed') {
+          message.error('PIR执行失败');
+          setExecutingPirId(null);
+          setExecutionProgress(null);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          fetchPirs();
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+    pollingRef.current = setInterval(poll, 3000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [executingPirId, fetchPirs]);
+
   const handleCreate = async (values: { title: string; description?: string; priority?: string; keywords?: string; target_sources?: string }) => {
     try {
       await pirsApi.create({
@@ -85,14 +138,23 @@ const PIRManager: React.FC = () => {
     }
   };
 
-  const handleDelete = async (pirId: string) => {
-    try {
-      await pirsApi.delete(pirId);
-      message.success('删除成功');
-      fetchPirs();
-    } catch (err) {
-      message.error(getErrorMessage(err));
-    }
+  const handleDelete = (pirId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除这条情报需求吗？此操作不可恢复。',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await pirsApi.delete(pirId);
+          message.success('情报需求已删除');
+          fetchPirs();
+        } catch (err) {
+          message.error(getErrorMessage(err));
+        }
+      },
+    });
   };
 
   const handleDecompose = async (pirId: string) => {
@@ -108,7 +170,13 @@ const PIRManager: React.FC = () => {
   const handleExecute = async (pirId: string) => {
     try {
       const result = await pirsApi.execute(pirId);
-      message.success(`PIR执行已提交，任务ID: ${result.task_id}`);
+      message.success('PIR执行已提交，可在任务列表中查看进度');
+      setExecutingPirId(pirId);
+      setExecutionProgress(null);
+      const stored = sessionStorage.getItem('tia_active_tasks');
+      const taskIds: string[] = stored ? JSON.parse(stored) : [];
+      taskIds.push(result.task_id);
+      sessionStorage.setItem('tia_active_tasks', JSON.stringify(taskIds));
       fetchPirs();
     } catch (err) {
       message.error(getErrorMessage(err));
@@ -205,9 +273,9 @@ const PIRManager: React.FC = () => {
               <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record.id)} />
             </Tooltip>
           )}
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Tooltip title="删除">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
+          </Tooltip>
         </Space>
       ),
     },
@@ -234,13 +302,35 @@ const PIRManager: React.FC = () => {
         </Space>
       </Card>
 
+      {executingPirId && executionProgress && (
+        <Card style={{ marginBottom: 16 }}>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Space>
+              <SyncOutlined spin style={{ color: '#1890ff' }} />
+              <Text strong>PIR执行中</Text>
+              <Tag color="blue">运行中</Tag>
+            </Space>
+            {executionProgress.current_step && (
+              <Text type="secondary">
+                当前步骤: {STEP_LABELS[executionProgress.current_step] || executionProgress.current_step}
+              </Text>
+            )}
+            <Progress
+              percent={executionProgress.progress ?? getStepProgress(executionProgress.current_step || '')}
+              status="active"
+              size="small"
+            />
+          </Space>
+        </Card>
+      )}
+
       <Card>
         <Table
           columns={columns}
           dataSource={pirs.items}
           rowKey="id"
           loading={loading}
-          locale={{ emptyText: <Empty description="暂无PIR数据" /> }}
+          locale={{ emptyText: <Empty description="暂无情报需求，点击创建按钮添加" /> }}
           pagination={{
             current: page,
             pageSize,
@@ -262,16 +352,44 @@ const PIRManager: React.FC = () => {
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleCreate}>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入PIR标题' }]}>
+          <Form.Item
+            name="title"
+            label="标题"
+            rules={[
+              { required: true, message: '请输入PIR标题' },
+              { min: 2, message: '标题至少2个字符' },
+            ]}
+          >
             <Input placeholder="输入PIR标题" />
           </Form.Item>
-          <Form.Item name="description" label="描述">
+          <Form.Item
+            name="description"
+            label="描述"
+            rules={[
+              { required: true, message: '请输入PIR描述' },
+              { min: 10, message: '描述至少10个字符' },
+            ]}
+          >
             <Input.TextArea rows={3} placeholder="描述情报需求..." />
           </Form.Item>
           <Form.Item name="priority" label="优先级" initialValue="medium">
             <Select options={Object.entries(PRIORITY_CONFIG).map(([value, config]) => ({ value, label: config.label }))} />
           </Form.Item>
-          <Form.Item name="keywords" label="关键词（逗号分隔）">
+          <Form.Item
+            name="keywords"
+            label="关键词（逗号分隔）"
+            rules={[
+              { required: true, message: '请输入至少1个关键词' },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.reject(new Error('请输入至少1个关键词'));
+                  const keywords = value.split(',').map((k: string) => k.trim()).filter(Boolean);
+                  if (keywords.length < 1) return Promise.reject(new Error('请输入至少1个关键词'));
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
             <Input placeholder="例如: 暗网,数据泄露,黑客" />
           </Form.Item>
           <Form.Item name="target_sources" label="目标来源（逗号分隔）">
@@ -316,6 +434,10 @@ const PIRManager: React.FC = () => {
               <Text strong>完成度: </Text>
               <Progress percent={selectedPir.fulfillment_score || 0} style={{ maxWidth: 300, display: 'inline-block', marginLeft: 8 }} />
             </div>
+
+            {selectedPir.created_at && (
+              <Paragraph><Text strong>创建时间: </Text>{formatTime(selectedPir.created_at)}</Paragraph>
+            )}
 
             {selectedPir.tasks && selectedPir.tasks.length > 0 && (
               <div>

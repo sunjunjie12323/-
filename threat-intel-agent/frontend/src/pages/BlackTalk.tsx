@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Card, Table, Tag, Input, Button, Space, Modal, Form, message,
+  Card, Table, Tag, Input, Button, Space, Modal, Form, message, Select,
   Empty, Spin, Typography, Tabs, List, Statistic, Row, Col, Alert,
 } from 'antd';
 import {
@@ -9,8 +9,18 @@ import {
 } from '@ant-design/icons';
 import { blacktalkApi, getErrorMessage } from '../services/api';
 import type { BlackTalkTerm, BlackTalkDecodeResult, BlackTalkStats, PaginatedResponse } from '../types';
+import { useDebounce } from '../utils/hooks';
 
 const { Text, Paragraph, Title } = Typography;
+
+const CATEGORY_OPTIONS = [
+  { value: '诈骗', label: '诈骗' },
+  { value: '赌博', label: '赌博' },
+  { value: '毒品', label: '毒品' },
+  { value: '黑客', label: '黑客' },
+  { value: '洗钱', label: '洗钱' },
+  { value: '其他', label: '其他' },
+];
 
 const BlackTalk: React.FC = () => {
   const [terms, setTerms] = useState<PaginatedResponse<BlackTalkTerm>>({ items: [], total: 0, offset: 0, limit: 20 });
@@ -26,11 +36,13 @@ const BlackTalk: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dictionary');
   const [form] = Form.useForm();
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const fetchTerms = useCallback(async () => {
     try {
       setLoading(true);
       const result = await blacktalkApi.listTerms({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         offset: (page - 1) * pageSize,
         limit: pageSize,
       });
@@ -40,7 +52,7 @@ const BlackTalk: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, page, pageSize]);
+  }, [debouncedSearch, page, pageSize]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -59,9 +71,9 @@ const BlackTalk: React.FC = () => {
     fetchStats();
   }, [fetchStats]);
 
-  const handleAddTerm = async (values: { term: string; meaning: string; context?: string; source?: string }) => {
+  const handleAddTerm = async (values: { term: string; meaning: string; category?: string; context?: string; source?: string }) => {
     try {
-      await blacktalkApi.addTerm(values.term, values.meaning, values.context, values.source);
+      await blacktalkApi.addTerm(values.term, values.meaning, values.context, values.source, values.category);
       message.success('术语添加成功');
       setAddModalOpen(false);
       form.resetFields();
@@ -81,11 +93,45 @@ const BlackTalk: React.FC = () => {
       setDecoding(true);
       const result = await blacktalkApi.decode(decodeInput);
       setDecodeResult(result);
+      if (result.terms_found > 0) {
+        message.success(`解码完成，发现 ${result.terms_found} 个黑话术语`);
+      } else {
+        message.info('未发现已知黑话术语');
+      }
     } catch (err) {
-      message.error(getErrorMessage(err));
+      message.error('解码失败，请重试');
     } finally {
       setDecoding(false);
     }
+  };
+
+  const highlightDecodedText = (text: string, foundTerms: BlackTalkDecodeResult['found_terms']): React.ReactNode[] => {
+    if (!foundTerms || foundTerms.length === 0) return [text];
+    const sortedTerms = [...foundTerms].sort((a, b) => {
+      const posA = a.position[0] ?? 0;
+      const posB = b.position[0] ?? 0;
+      return posA - posB;
+    });
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    for (let i = 0; i < sortedTerms.length; i++) {
+      const term = sortedTerms[i];
+      const start = term.position[0] ?? lastIndex;
+      const end = term.position[1] ?? (start + term.term.length);
+      if (start > lastIndex) {
+        parts.push(<span key={`text-${i}`}>{text.substring(lastIndex, start)}</span>);
+      }
+      parts.push(
+        <Tag key={`term-${i}`} color="orange" style={{ margin: '0 2px' }}>
+          {text.substring(start, end)}
+        </Tag>
+      );
+      lastIndex = end;
+    }
+    if (lastIndex < text.length) {
+      parts.push(<span key="text-last">{text.substring(lastIndex)}</span>);
+    }
+    return parts;
   };
 
   const columns = [
@@ -108,21 +154,21 @@ const BlackTalk: React.FC = () => {
       key: 'context',
       width: 200,
       ellipsis: true,
-      render: (ctx: string | undefined) => ctx || <Text type="secondary">-</Text>,
+      render: (ctx: string | undefined) => ctx || <Text type="secondary">—</Text>,
     },
     {
       title: '来源',
       dataIndex: 'source',
       key: 'source',
       width: 100,
-      render: (source: string | undefined) => source ? <Tag>{source}</Tag> : <Text type="secondary">-</Text>,
+      render: (source: string | undefined) => source ? <Tag>{source}</Tag> : <Text type="secondary">—</Text>,
     },
     {
       title: '分类',
       dataIndex: 'category',
       key: 'category',
       width: 100,
-      render: (cat: string | undefined) => cat ? <Tag color="blue">{cat}</Tag> : <Text type="secondary">-</Text>,
+      render: (cat: string | undefined) => cat ? <Tag color="blue">{cat}</Tag> : <Text type="secondary">—</Text>,
     },
     {
       title: '置信度',
@@ -130,7 +176,7 @@ const BlackTalk: React.FC = () => {
       key: 'confidence',
       width: 100,
       render: (conf: number | undefined) => {
-        if (conf === undefined || conf === null) return <Text type="secondary">-</Text>;
+        if (conf === undefined || conf === null) return <Text type="secondary">—</Text>;
         const color = conf >= 0.8 ? 'green' : conf >= 0.5 ? 'orange' : 'red';
         return <Tag color={color}>{(conf * 100).toFixed(0)}%</Tag>;
       },
@@ -186,7 +232,7 @@ const BlackTalk: React.FC = () => {
               dataSource={terms.items}
               rowKey="id"
               loading={loading}
-              locale={{ emptyText: <Empty description="暂无黑话术语" /> }}
+              locale={{ emptyText: <Empty description="暂无黑话数据" /> }}
               pagination={{
                 current: page,
                 pageSize,
@@ -244,20 +290,30 @@ const BlackTalk: React.FC = () => {
                   </div>
                   <div style={{ marginBottom: 16 }}>
                     <Text strong>解码文本: </Text>
-                    <Paragraph>{decodeResult.decoded_text}</Paragraph>
+                    <Paragraph>
+                      {highlightDecodedText(decodeResult.decoded_text, decodeResult.found_terms)}
+                    </Paragraph>
                   </div>
                   {decodeResult.found_terms && decodeResult.found_terms.length > 0 && (
                     <div>
-                      <Text strong>识别的术语:</Text>
-                      <List
+                      <Text strong style={{ display: 'block', marginBottom: 8 }}>识别的术语:</Text>
+                      <Table
                         size="small"
-                        dataSource={decodeResult.found_terms}
-                        renderItem={(term) => (
-                          <List.Item>
-                            <Text strong>{term.term}</Text>
-                            <Text type="secondary" style={{ marginLeft: 8 }}>→ {term.meaning}</Text>
-                          </List.Item>
-                        )}
+                        dataSource={decodeResult.found_terms.map((t, idx) => ({ ...t, key: idx }))}
+                        columns={[
+                          {
+                            title: '黑话术语',
+                            dataIndex: 'term',
+                            key: 'term',
+                            render: (term: string) => <Tag color="orange">{term}</Tag>,
+                          },
+                          {
+                            title: '含义',
+                            dataIndex: 'meaning',
+                            key: 'meaning',
+                          },
+                        ]}
+                        pagination={false}
                       />
                     </div>
                   )}
@@ -339,11 +395,26 @@ const BlackTalk: React.FC = () => {
         cancelText="取消"
       >
         <Form form={form} layout="vertical" onFinish={handleAddTerm}>
-          <Form.Item name="term" label="术语" rules={[{ required: true, message: '请输入术语' }]}>
+          <Form.Item
+            name="term"
+            label="术语"
+            rules={[{ required: true, message: '请输入术语' }]}
+          >
             <Input placeholder="输入黑话术语" />
           </Form.Item>
-          <Form.Item name="meaning" label="含义" rules={[{ required: true, message: '请输入含义' }]}>
+          <Form.Item
+            name="meaning"
+            label="含义"
+            rules={[{ required: true, message: '请输入含义' }]}
+          >
             <Input placeholder="输入术语含义" />
+          </Form.Item>
+          <Form.Item
+            name="category"
+            label="分类"
+            rules={[{ required: true, message: '请选择分类' }]}
+          >
+            <Select placeholder="选择分类" options={CATEGORY_OPTIONS} />
           </Form.Item>
           <Form.Item name="context" label="上下文">
             <Input placeholder="可选，使用场景" />

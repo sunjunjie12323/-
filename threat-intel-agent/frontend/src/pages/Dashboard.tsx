@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Spin, message, Empty, Tag, Typography, Row, Col, Statistic, List, Badge, Progress } from 'antd';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Card, Spin, message, Empty, Tag, Typography, Row, Col, Statistic, List, Badge, Progress, Button, Space } from 'antd';
 import {
   AlertOutlined,
   DatabaseOutlined,
@@ -10,19 +10,15 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   SyncOutlined,
+  TranslationOutlined,
+  ShareAltOutlined,
 } from '@ant-design/icons';
-import { dashboardApi } from '../services/api';
-import type { DashboardStats, RecentIntelligence, AgentStatus, RecentExecution } from '../types';
+import { dashboardApi, agentApi } from '../services/api';
+import type { DashboardStats, RecentIntelligence, AgentStatus, RecentExecution, TaskStatus } from '../types';
+import { THREAT_LEVEL_CONFIG } from '../utils/constants';
+import { formatTime } from '../utils/constants';
 
 const { Title, Text, Paragraph } = Typography;
-
-const THREAT_LEVEL_CONFIG: Record<string, { color: string; label: string }> = {
-  critical: { color: '#cf1322', label: '严重' },
-  high: { color: '#d4380d', label: '高危' },
-  medium: { color: '#d48806', label: '中危' },
-  low: { color: '#389e0d', label: '低危' },
-  info: { color: '#0958d9', label: '信息' },
-};
 
 const AGENT_STATUS_ICON: Record<string, React.ReactNode> = {
   idle: <ClockCircleOutlined />,
@@ -31,10 +27,20 @@ const AGENT_STATUS_ICON: Record<string, React.ReactNode> = {
   error: <ExclamationCircleOutlined />,
 };
 
+const STEP_LABELS: Record<string, string> = {
+  collecting: '情报采集中',
+  cleaning: '数据清洗中',
+  analyzing: '分析处理中',
+  building_graph: '构建图谱中',
+  generating_report: '生成报告中',
+};
+
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [taskProgresses, setTaskProgresses] = useState<TaskStatus[]>([]);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -57,6 +63,44 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchStats]);
 
+  const fetchTaskProgresses = useCallback(async () => {
+    try {
+      const stored = sessionStorage.getItem('tia_active_tasks');
+      if (!stored) return;
+      const taskIds: string[] = JSON.parse(stored);
+      const activeIds = taskIds.filter(Boolean);
+      if (activeIds.length === 0) return;
+      const results: TaskStatus[] = [];
+      for (const taskId of activeIds.slice(0, 5)) {
+        try {
+          const status = await agentApi.getTaskStatus(taskId);
+          results.push(status);
+          if (status.status === 'completed' || status.status === 'failed') {
+            const current = sessionStorage.getItem('tia_active_tasks');
+            if (current) {
+              const ids: string[] = JSON.parse(current);
+              const updated = ids.filter((id) => id !== taskId);
+              sessionStorage.setItem('tia_active_tasks', JSON.stringify(updated));
+            }
+          }
+        } catch {
+          // ignore individual task fetch errors
+        }
+      }
+      setTaskProgresses(results);
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTaskProgresses();
+    pollingRef.current = setInterval(fetchTaskProgresses, 5000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchTaskProgresses]);
+
   if (loading && !stats) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
@@ -77,6 +121,8 @@ const Dashboard: React.FC = () => {
 
   const threatDist = stats?.threat_level_distribution || {};
   const sourceDist = stats?.source_type_distribution || {};
+  const knowledgeGraph = stats?.knowledge_graph || { node_count: 0, edge_count: 0 };
+  const blacktalk = stats?.blacktalk || { total_terms: 0, categories: {} };
 
   return (
     <div style={{ padding: '0 0 24px' }}>
@@ -85,7 +131,7 @@ const Dashboard: React.FC = () => {
           <Card hoverable>
             <Statistic
               title="情报总量"
-              value={stats?.total_intelligence || 0}
+              value={stats?.total_intelligence ?? 0}
               prefix={<DatabaseOutlined />}
               valueStyle={{ color: '#0958d9' }}
             />
@@ -95,7 +141,7 @@ const Dashboard: React.FC = () => {
           <Card hoverable>
             <Statistic
               title="活跃PIR"
-              value={stats?.active_pirs || 0}
+              value={stats?.active_pirs ?? 0}
               prefix={<FileSearchOutlined />}
               valueStyle={{ color: '#389e0d' }}
             />
@@ -105,7 +151,7 @@ const Dashboard: React.FC = () => {
           <Card hoverable>
             <Statistic
               title="威胁告警"
-              value={stats?.threat_alerts || 0}
+              value={stats?.threat_alerts ?? 0}
               prefix={<AlertOutlined />}
               valueStyle={{ color: '#cf1322' }}
             />
@@ -115,7 +161,7 @@ const Dashboard: React.FC = () => {
           <Card hoverable>
             <Statistic
               title="图谱节点"
-              value={stats?.graph_nodes || 0}
+              value={knowledgeGraph.node_count ?? 0}
               prefix={<NodeIndexOutlined />}
               valueStyle={{ color: '#722ed1' }}
             />
@@ -124,10 +170,33 @@ const Dashboard: React.FC = () => {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col xs={24} sm={12}>
+          <Card hoverable>
+            <Statistic
+              title="图谱关系"
+              value={knowledgeGraph.edge_count ?? 0}
+              prefix={<ShareAltOutlined />}
+              valueStyle={{ color: '#13c2c2' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Card hoverable>
+            <Statistic
+              title="黑话术语"
+              value={blacktalk.total_terms ?? 0}
+              prefix={<TranslationOutlined />}
+              valueStyle={{ color: '#fa8c16' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={14}>
-          <Card title="最近情报" extra={<a onClick={fetchStats}><ReloadIcon /></a>} style={{ height: '100%' }}>
+          <Card title="最近情报" extra={<a onClick={fetchStats}><ReloadOutlined style={{ marginRight: 4 }} />刷新</a>} style={{ height: '100%' }}>
             {(!stats?.recent_intelligence || stats.recent_intelligence.length === 0) ? (
-              <Empty description="暂无情报数据" />
+              <Empty description="暂无情报数据，点击上方按钮开始采集" />
             ) : (
               <List
                 dataSource={stats.recent_intelligence.slice(0, 10)}
@@ -151,7 +220,7 @@ const Dashboard: React.FC = () => {
                         <div>
                           <Text type="secondary">
                             {item.source || item.source_type || '未知来源'}
-                            {item.collected_at && ` · ${new Date(item.collected_at).toLocaleString('zh-CN')}`}
+                            {item.collected_at && ` · ${formatTime(item.collected_at)}`}
                           </Text>
                           {item.is_processed !== undefined && (
                             <Tag color={item.is_processed ? 'green' : 'orange'} style={{ marginLeft: 8 }}>
@@ -263,7 +332,7 @@ const Dashboard: React.FC = () => {
                           </Tag>
                           {(exec.started_at || exec.start_time) && (
                             <Text type="secondary" style={{ marginLeft: 8 }}>
-                              {(exec.started_at || exec.start_time) && new Date(exec.started_at || exec.start_time || '').toLocaleString('zh-CN')}
+                              {formatTime(exec.started_at || exec.start_time || '')}
                             </Text>
                           )}
                           {exec.duration_seconds !== undefined && (
@@ -279,10 +348,65 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {taskProgresses.length > 0 && (
+        <Card title="任务进度" style={{ marginTop: 16 }}>
+          <List
+            dataSource={taskProgresses}
+            renderItem={(task) => (
+              <List.Item
+                actions={[
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      if (task.status === 'completed' || task.status === 'failed') {
+                        setTaskProgresses((prev) => prev.filter((t) => t.task_id !== task.task_id));
+                      }
+                    }}
+                  >
+                    {task.status === 'completed' || task.status === 'failed' ? '关闭' : '查看'}
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={
+                    task.status === 'running' ? <SyncOutlined spin style={{ color: '#1890ff' }} /> :
+                    task.status === 'completed' ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> :
+                    task.status === 'failed' ? <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} /> :
+                    <ClockCircleOutlined style={{ color: '#faad14' }} />
+                  }
+                  title={
+                    <Space>
+                      <Text>任务 {task.task_id?.substring(0, 8)}...</Text>
+                      <Tag color={task.status === 'completed' ? 'green' : task.status === 'running' ? 'blue' : task.status === 'failed' ? 'red' : 'default'}>
+                        {task.status === 'completed' ? '已完成' : task.status === 'running' ? '运行中' : task.status === 'failed' ? '失败' : '待执行'}
+                      </Tag>
+                    </Space>
+                  }
+                  description={
+                    <div>
+                      {task.current_step && (
+                        <Text type="secondary">{STEP_LABELS[task.current_step] || task.current_step}</Text>
+                      )}
+                      {task.progress !== undefined && task.progress > 0 && (
+                        <Progress percent={task.progress} size="small" style={{ maxWidth: 200, marginTop: 4 }} />
+                      )}
+                      {task.results_summary && (
+                        <Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }}>
+                          {task.results_summary}
+                        </Paragraph>
+                      )}
+                    </div>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
     </div>
   );
 };
-
-const ReloadIcon: React.FC = () => <ReloadOutlined style={{ marginRight: 4 }} />;
 
 export default Dashboard;

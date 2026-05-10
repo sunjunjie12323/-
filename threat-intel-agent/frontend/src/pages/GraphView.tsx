@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Card, Select, Button, Space, Input, message, Empty, Spin, Typography, Tag, List, Divider, Row, Col, Statistic, Modal } from 'antd';
+import { Card, Select, Button, Space, Input, message, Empty, Spin, Typography, Tag, List, Divider, Row, Col, Statistic, Modal, Badge, Table } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, ApartmentOutlined, ShareAltOutlined,
-  TeamOutlined, NodeIndexOutlined,
+  TeamOutlined, NodeIndexOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { graphApi, getErrorMessage } from '../services/api';
 import type { GraphData, GraphStats, CommunityResult, PathResult, GraphNode, GraphEdge } from '../types';
+import { useDebounce } from '../utils/hooks';
 
 const { Text, Paragraph } = Typography;
 
@@ -21,6 +22,7 @@ const ENTITY_TYPE_COLORS: Record<string, string> = {
   hash: '#a0d911',
   cryptocurrency: '#fadb14',
   keyword: '#bfbfbf',
+  malware: '#cf1322',
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -35,7 +37,27 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   hash: '哈希',
   cryptocurrency: '加密货币',
   keyword: '关键词',
+  malware: '恶意软件',
 };
+
+const HIGH_RISK_TYPES = new Set(['malware', 'organization', 'person']);
+
+function calculateCommunityRisk(members: Array<{ type: string; value: string }>): { level: string; color: string; label: string } {
+  let highRiskCount = 0;
+  for (const member of members) {
+    if (HIGH_RISK_TYPES.has(member.type)) {
+      highRiskCount++;
+    }
+  }
+  const ratio = members.length > 0 ? highRiskCount / members.length : 0;
+  if (ratio >= 0.5 || highRiskCount >= 3) {
+    return { level: 'high', color: '#cf1322', label: '高危' };
+  }
+  if (ratio >= 0.2 || highRiskCount >= 1) {
+    return { level: 'medium', color: '#fa8c16', label: '中危' };
+  }
+  return { level: 'low', color: '#52c41a', label: '低危' };
+}
 
 const GraphView: React.FC = () => {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
@@ -51,12 +73,14 @@ const GraphView: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphInstanceRef = useRef<any>(null);
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const fetchGraphData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await graphApi.getData({
         entity_type: entityTypeFilter,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
       });
       setGraphData(data);
     } catch (err) {
@@ -64,7 +88,7 @@ const GraphView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, entityTypeFilter]);
+  }, [debouncedSearch, entityTypeFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -243,6 +267,25 @@ const GraphView: React.FC = () => {
     }
   };
 
+  const handleDeleteEntity = (entityId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除该实体吗？此操作不可恢复。',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          message.success('实体已删除');
+          fetchGraphData();
+          fetchStats();
+        } catch (err) {
+          message.error(getErrorMessage(err));
+        }
+      },
+    });
+  };
+
   const entityTypeOptions = Object.entries(ENTITY_TYPE_LABELS).map(([value, label]) => ({
     value,
     label,
@@ -311,7 +354,7 @@ const GraphView: React.FC = () => {
               </div>
             ) : !graphData || graphData.nodes.length === 0 ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <Empty description="暂无图谱数据" />
+                <Empty description="知识图谱为空，请先采集并分析情报以构建图谱" />
               </div>
             ) : (
               <div ref={containerRef} style={{ width: '100%', height: 600 }} />
@@ -321,7 +364,9 @@ const GraphView: React.FC = () => {
 
         <Col xs={24} lg={6}>
           {selectedNode && (
-            <Card title="选中节点" style={{ marginBottom: 16 }} size="small">
+            <Card title="选中节点" style={{ marginBottom: 16 }} size="small" extra={
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteEntity(selectedNode.id)} />
+            }>
               <p><Text strong>名称: </Text>{selectedNode.label}</p>
               <p>
                 <Text strong>类型: </Text>
@@ -364,11 +409,18 @@ const GraphView: React.FC = () => {
               <List
                 size="small"
                 dataSource={communities.communities}
-                renderItem={(community, idx) => (
-                  <List.Item>
-                    <Text>社区 {idx + 1}: {community.member_count} 成员</Text>
-                  </List.Item>
-                )}
+                renderItem={(community, idx) => {
+                  const risk = calculateCommunityRisk(community.members);
+                  return (
+                    <List.Item>
+                      <Space>
+                        <Badge color={risk.color} />
+                        <Text>社区 {idx + 1}: {community.member_count} 成员</Text>
+                        <Tag color={risk.color}>{risk.label}</Tag>
+                      </Space>
+                    </List.Item>
+                  );
+                }}
               />
             </Card>
           )}

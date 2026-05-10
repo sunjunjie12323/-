@@ -20,9 +20,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setError(null);
       const result = await authApi.login(values.username, values.password);
       if (values.remember) {
-        localStorage.setItem('remember_user', values.username);
+        localStorage.setItem('tia_remember_user', values.username);
       } else {
-        localStorage.removeItem('remember_user');
+        localStorage.removeItem('tia_remember_user');
       }
       message.success(`欢迎回来，${result.user.username}！`);
       onLoginSuccess();
@@ -34,7 +34,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const rememberedUser = localStorage.getItem('remember_user') || '';
+  const rememberedUser = localStorage.getItem('tia_remember_user') || '';
 
   return (
     <div style={{

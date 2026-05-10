@@ -21,6 +21,7 @@ import type {
   TaskStatus,
   User,
 } from '../types';
+import { tokenStorage } from '../utils/tokenStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -37,7 +38,7 @@ const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('access_token');
+    const token = tokenStorage.getToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -51,9 +52,8 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       const detail = (error.response.data as { detail?: string })?.detail;
-      if (detail?.includes('已被撤销') || detail?.includes('无效令牌')) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
+      if (detail?.includes('已被撤销') || detail?.includes('无效令牌') || detail?.includes('expired')) {
+        tokenStorage.clear();
         window.location.href = '/login';
       }
     }
@@ -92,8 +92,8 @@ export { getErrorMessage };
 export const authApi = {
   login: async (username: string, password: string): Promise<LoginResponse> => {
     const { data } = await apiClient.post<LoginResponse>('/auth/login', { username, password });
-    localStorage.setItem('access_token', data.access_token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    tokenStorage.setToken(data.access_token);
+    tokenStorage.setUser(data.user);
     return data;
   },
 
@@ -101,8 +101,7 @@ export const authApi = {
     try {
       await apiClient.post('/auth/logout');
     } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
+      tokenStorage.clear();
     }
   },
 
@@ -197,12 +196,13 @@ export const blacktalkApi = {
     return data;
   },
 
-  addTerm: async (term: string, meaning: string, context?: string, source?: string): Promise<BlackTalkTerm> => {
+  addTerm: async (term: string, meaning: string, context?: string, source?: string, category?: string): Promise<BlackTalkTerm> => {
     const { data } = await apiClient.post<BlackTalkTerm>('/blacktalk/terms', {
       term,
       meaning,
       context: context || '',
       source: source || 'manual',
+      category: category || '',
     });
     return data;
   },
@@ -408,6 +408,11 @@ export const agentApi = {
 
   getExecution: async (executionId: string): Promise<Record<string, unknown>> => {
     const { data } = await apiClient.get(`/agent/execution/${executionId}`);
+    return data;
+  },
+
+  getTaskStatus: async (taskId: string): Promise<TaskStatus> => {
+    const { data } = await apiClient.get<TaskStatus>(`/agent/task/${taskId}`);
     return data;
   },
 

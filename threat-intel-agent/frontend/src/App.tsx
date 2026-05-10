@@ -11,8 +11,17 @@ import BlackTalk from './pages/BlackTalk';
 import Reports from './pages/Reports';
 import Login from './pages/Login';
 import AgentPage from './pages/Agent';
+import { tokenStorage } from './utils/tokenStorage';
 
-const getToken = (): string | null => localStorage.getItem('access_token');
+const getToken = (): string | null => {
+  const token = tokenStorage.getToken();
+  if (!token) return null;
+  if (tokenStorage.isTokenExpired()) {
+    tokenStorage.clear();
+    return null;
+  }
+  return token;
+};
 
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = getToken();

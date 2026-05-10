@@ -47,7 +47,14 @@ export interface DashboardStats {
   total_intelligence: number;
   active_pirs: number;
   threat_alerts: number;
-  graph_nodes: number;
+  knowledge_graph: {
+    node_count: number;
+    edge_count: number;
+  };
+  blacktalk: {
+    total_terms: number;
+    categories: Record<string, number>;
+  };
   threat_level_distribution: Record<string, number>;
   source_type_distribution: Record<string, number>;
   recent_intelligence: RecentIntelligence[];
@@ -248,4 +255,6 @@ export interface TaskStatus {
   execution_id?: string;
   results?: unknown;
   results_summary?: string;
+  progress?: number;
+  current_step?: string;
 }

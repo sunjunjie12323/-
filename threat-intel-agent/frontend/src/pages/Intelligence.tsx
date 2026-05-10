@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Tag, Input, Select, Button, Space, Modal, Form, message,
-  Empty, Spin, Typography, Popconfirm, Badge, Tooltip,
+  Empty, Spin, Typography, Badge, Tooltip,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined,
@@ -9,16 +9,11 @@ import {
 } from '@ant-design/icons';
 import { intelligenceApi, getErrorMessage } from '../services/api';
 import type { IntelligenceItem, IntelligenceStats, PaginatedResponse } from '../types';
+import { THREAT_LEVEL_CONFIG } from '../utils/constants';
+import { formatTime } from '../utils/constants';
+import { useDebounce } from '../utils/hooks';
 
 const { Text, Paragraph } = Typography;
-
-const THREAT_LEVEL_CONFIG: Record<string, { color: string; label: string }> = {
-  critical: { color: '#cf1322', label: '严重' },
-  high: { color: '#d4380d', label: '高危' },
-  medium: { color: '#d48806', label: '中危' },
-  low: { color: '#389e0d', label: '低危' },
-  info: { color: '#0958d9', label: '信息' },
-};
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   raw: { color: 'default', label: '原始' },
@@ -58,11 +53,13 @@ const Intelligence: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [form] = Form.useForm();
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const result = await intelligenceApi.list({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         source: sourceFilter,
         threat_level: threatFilter,
         offset: (page - 1) * pageSize,
@@ -74,7 +71,7 @@ const Intelligence: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, sourceFilter, threatFilter, page, pageSize]);
+  }, [debouncedSearch, sourceFilter, threatFilter, page, pageSize]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -110,15 +107,24 @@ const Intelligence: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await intelligenceApi.delete(id);
-      message.success('删除成功');
-      fetchData();
-      fetchStats();
-    } catch (err) {
-      message.error(getErrorMessage(err));
-    }
+  const handleDelete = (id: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除这条情报吗？此操作不可恢复。',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await intelligenceApi.delete(id);
+          message.success('情报已删除');
+          fetchData();
+          fetchStats();
+        } catch (err) {
+          message.error(getErrorMessage(err));
+        }
+      },
+    });
   };
 
   const handleViewDetail = async (item: IntelligenceItem) => {
@@ -159,7 +165,7 @@ const Intelligence: React.FC = () => {
       dataIndex: 'source',
       key: 'source',
       width: 100,
-      render: (source: string | null) => source ? <Tag>{source}</Tag> : <Text type="secondary">-</Text>,
+      render: (source: string | null) => source ? <Tag>{source}</Tag> : <Text type="secondary">—</Text>,
     },
     {
       title: '内容',
@@ -178,7 +184,7 @@ const Intelligence: React.FC = () => {
       key: 'threat_level',
       width: 100,
       render: (level: string | null) => {
-        if (!level) return <Text type="secondary">-</Text>;
+        if (!level) return <Text type="secondary">—</Text>;
         const config = THREAT_LEVEL_CONFIG[level];
         return config ? <Tag color={config.color}>{config.label}</Tag> : <Tag>{level}</Tag>;
       },
@@ -205,7 +211,7 @@ const Intelligence: React.FC = () => {
       dataIndex: 'collected_at',
       key: 'collected_at',
       width: 160,
-      render: (time: string | null) => time ? new Date(time).toLocaleString('zh-CN') : '-',
+      render: (time: string | null) => time ? <Tooltip title={formatTime(time)}><Text>{formatTime(time)}</Text></Tooltip> : '—',
     },
     {
       title: '操作',
@@ -226,9 +232,9 @@ const Intelligence: React.FC = () => {
               <Button type="link" size="small" onClick={() => handleStatusChange(record.id, 'analyzed')}>分析</Button>
             </Tooltip>
           )}
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)} okText="确认" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Tooltip title="删除">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
+          </Tooltip>
         </Space>
       ),
     },
@@ -290,7 +296,7 @@ const Intelligence: React.FC = () => {
           dataSource={data.items}
           rowKey="id"
           loading={loading}
-          locale={{ emptyText: <Empty description="暂无情报数据" /> }}
+          locale={{ emptyText: <Empty description="暂无情报数据，点击上方按钮开始采集" /> }}
           pagination={{
             current: page,
             pageSize,
@@ -312,10 +318,19 @@ const Intelligence: React.FC = () => {
         cancelText="取消"
       >
         <Form form={form} layout="vertical" onFinish={handleCreate}>
-          <Form.Item name="source" label="来源" initialValue="other">
+          <Form.Item
+            name="source"
+            label="来源"
+            initialValue="other"
+            rules={[{ required: true, message: '请选择情报来源' }]}
+          >
             <Select options={SOURCE_OPTIONS} />
           </Form.Item>
-          <Form.Item name="content" label="内容" rules={[{ required: true, message: '请输入情报内容' }]}>
+          <Form.Item
+            name="content"
+            label="内容"
+            rules={[{ required: true, message: '请输入情报内容' }, { min: 5, message: '内容至少5个字符' }]}
+          >
             <Input.TextArea rows={4} placeholder="输入情报内容..." />
           </Form.Item>
           <Form.Item name="source_url" label="来源URL">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Card, Input, Button, Space, message, Empty, Spin, Typography, Tag, List, Badge, Row, Col, Statistic, Divider,
+  Card, Input, Button, Space, message, Empty, Spin, Typography, Tag, List, Badge, Row, Col, Statistic, Divider, notification,
 } from 'antd';
 import {
   SendOutlined, ReloadOutlined, RobotOutlined, HistoryOutlined,
@@ -8,8 +8,20 @@ import {
 } from '@ant-design/icons';
 import { agentApi, getErrorMessage } from '../services/api';
 import type { TaskStatus } from '../types';
+import { formatTime } from '../utils/constants';
 
 const { Text, Paragraph } = Typography;
+
+function addActiveTask(taskId: string) {
+  try {
+    const stored = sessionStorage.getItem('tia_active_tasks');
+    const taskIds: string[] = stored ? JSON.parse(stored) : [];
+    taskIds.push(taskId);
+    sessionStorage.setItem('tia_active_tasks', JSON.stringify(taskIds));
+  } catch {
+    // ignore
+  }
+}
 
 const Agent: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -51,7 +63,13 @@ const Agent: React.FC = () => {
       setSubmitting(true);
       const result = await agentApi.submitQuery(query);
       setLastResult(result);
-      message.success(`查询已提交，任务ID: ${result.task_id}`);
+      addActiveTask(result.task_id);
+      message.success('任务已提交，可在任务列表中查看进度');
+      notification.info({
+        message: '任务已提交',
+        description: `任务ID: ${result.task_id}，可在仪表盘查看进度`,
+        duration: 5,
+      });
       setQuery('');
       fetchHistory();
     } catch (err) {
@@ -65,7 +83,13 @@ const Agent: React.FC = () => {
     try {
       setSubmitting(true);
       const result = await agentApi.triggerCollection();
-      message.success(`情报收集任务已提交，任务ID: ${result.task_id}`);
+      addActiveTask(result.task_id);
+      message.success('情报收集任务已提交，可在任务列表中查看进度');
+      notification.info({
+        message: '情报收集已提交',
+        description: `任务ID: ${result.task_id}，可在仪表盘查看进度`,
+        duration: 5,
+      });
       fetchHistory();
     } catch (err) {
       message.error(getErrorMessage(err));
@@ -78,7 +102,13 @@ const Agent: React.FC = () => {
     try {
       setSubmitting(true);
       const result = await agentApi.triggerAnalysis();
-      message.success(`情报分析任务已提交，任务ID: ${result.task_id}`);
+      addActiveTask(result.task_id);
+      message.success('情报分析任务已提交，可在任务列表中查看进度');
+      notification.info({
+        message: '情报分析已提交',
+        description: `任务ID: ${result.task_id}，可在仪表盘查看进度`,
+        duration: 5,
+      });
       fetchHistory();
     } catch (err) {
       message.error(getErrorMessage(err));
@@ -182,7 +212,7 @@ const Agent: React.FC = () => {
                       }
                       description={
                         <Text type="secondary">
-                          {(item.start_time as string) && new Date(item.start_time as string).toLocaleString('zh-CN')}
+                          {(item.start_time as string) && formatTime(item.start_time as string)}
                           {item.duration_seconds !== undefined && ` · ${(item.duration_seconds as number).toFixed(1)}s`}
                         </Text>
                       }

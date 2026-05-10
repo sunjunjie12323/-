@@ -11,22 +11,10 @@ import {
   MoreOutlined,
 } from '@ant-design/icons';
 import type { IntelligenceItem } from '../types';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import 'dayjs/locale/zh-cn';
-
-dayjs.extend(relativeTime);
-dayjs.locale('zh-cn');
+import { THREAT_LEVEL_CONFIG } from '../utils/constants';
+import { formatTime } from '../utils/constants';
 
 const { Text, Paragraph } = Typography;
-
-const threatLevelConfig: Record<string, { color: string; label: string }> = {
-  critical: { color: '#ff4d4f', label: '严重' },
-  high: { color: '#ff7a45', label: '高危' },
-  medium: { color: '#faad14', label: '中危' },
-  low: { color: '#52c41a', label: '低危' },
-  info: { color: '#1890ff', label: '信息' },
-};
 
 const sourceTypeIcons: Record<string, React.ReactNode> = {
   telegram: <MessageOutlined />,
@@ -52,7 +40,7 @@ interface IntelCardProps {
 }
 
 const IntelCard: React.FC<IntelCardProps> = ({ intel, onViewDetail, onAnalyze, onAddToGraph }) => {
-  const threatConfig = threatLevelConfig[intel.threat_level || ''] || threatLevelConfig.info;
+  const threatConfig = THREAT_LEVEL_CONFIG[intel.threat_level || ''] || THREAT_LEVEL_CONFIG.info;
 
   const dropdownItems = [
     {
@@ -137,10 +125,10 @@ const IntelCard: React.FC<IntelCardProps> = ({ intel, onViewDetail, onAnalyze, o
             <MoreOutlined style={{ cursor: 'pointer', fontSize: 18, color: '#999' }} />
           </Dropdown>
           {intel.collected_at && (
-            <Tooltip title={dayjs(intel.collected_at).format('YYYY-MM-DD HH:mm:ss')}>
+            <Tooltip title={formatTime(intel.collected_at)}>
               <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
                 <ClockCircleOutlined style={{ marginRight: 4 }} />
-                {dayjs(intel.collected_at).fromNow()}
+                {formatTime(intel.collected_at)}
               </Text>
             </Tooltip>
           )}

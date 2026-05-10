@@ -15,6 +15,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authApi } from '../services/api';
 import type { User } from '../types';
+import { tokenStorage } from '../utils/tokenStorage';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -22,6 +23,16 @@ const { Text } = Typography;
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+const ALL_MENU_ITEMS = [
+  { key: '/', icon: <DashboardOutlined />, label: '仪表盘', roles: ['admin', 'analyst', 'viewer'] },
+  { key: '/intelligence', icon: <DatabaseOutlined />, label: '情报管理', roles: ['admin', 'analyst', 'viewer'] },
+  { key: '/graph', icon: <NodeIndexOutlined />, label: '知识图谱', roles: ['admin', 'analyst', 'viewer'] },
+  { key: '/blacktalk', icon: <TranslationOutlined />, label: '黑话解码', roles: ['admin', 'analyst', 'viewer'] },
+  { key: '/pirs', icon: <FileSearchOutlined />, label: 'PIR管理', roles: ['admin', 'analyst'] },
+  { key: '/reports', icon: <FileTextOutlined />, label: '报告中心', roles: ['admin', 'analyst', 'viewer'] },
+  { key: '/agent', icon: <RobotOutlined />, label: 'Agent', roles: ['admin', 'analyst'] },
+];
 
 const AppLayout: React.FC<LayoutProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -31,13 +42,9 @@ const AppLayout: React.FC<LayoutProps> = ({ children }) => {
   const { token: themeToken } = theme.useToken();
 
   useEffect(() => {
-    const stored = localStorage.getItem('user');
+    const stored = tokenStorage.getUser<User>();
     if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem('user');
-      }
+      setUser(stored);
     }
   }, []);
 
@@ -51,43 +58,9 @@ const AppLayout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
-  const menuItems = [
-    {
-      key: '/',
-      icon: <DashboardOutlined />,
-      label: '仪表盘',
-    },
-    {
-      key: '/intelligence',
-      icon: <DatabaseOutlined />,
-      label: '情报管理',
-    },
-    {
-      key: '/graph',
-      icon: <NodeIndexOutlined />,
-      label: '知识图谱',
-    },
-    {
-      key: '/blacktalk',
-      icon: <TranslationOutlined />,
-      label: '黑话解码',
-    },
-    {
-      key: '/pirs',
-      icon: <FileSearchOutlined />,
-      label: 'PIR管理',
-    },
-    {
-      key: '/reports',
-      icon: <FileTextOutlined />,
-      label: '报告中心',
-    },
-    {
-      key: '/agent',
-      icon: <RobotOutlined />,
-      label: 'Agent',
-    },
-  ];
+  const userRole = user?.role || 'viewer';
+
+  const menuItems = ALL_MENU_ITEMS.filter((item) => item.roles.includes(userRole));
 
   const roleLabels: Record<string, { color: string; label: string }> = {
     admin: { color: 'red', label: '管理员' },
@@ -131,7 +104,7 @@ const AppLayout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
-  const selectedKey = menuItems.find((item) => {
+  const selectedKey = ALL_MENU_ITEMS.find((item) => {
     if (item.key === '/') return location.pathname === '/';
     return location.pathname.startsWith(item.key);
   })?.key || '/';
