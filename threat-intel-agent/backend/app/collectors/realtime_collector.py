@@ -73,8 +73,11 @@ class RealTimeCollector:
                 items = cached
 
         if not items:
-            self.logger.warning("All real sources failed, falling back to LLM simulation")
-            items = await self._llm_fallback(keywords, max_results)
+            self.logger.error(
+                "All real-time sources failed and no cache available. "
+                "URLhaus, AlienVault OTX, and CISA KEV are free APIs. "
+                "Check network connectivity."
+            )
 
         if items:
             self._save_cache(items)
@@ -248,36 +251,3 @@ class RealTimeCollector:
             self.logger.warning(f"CISA KEV request failed: {exc}")
 
         return items
-
-    async def _llm_fallback(self, keywords: List[str], max_results: int) -> List[Dict]:
-        system_prompt = (
-            "你是一个黑灰产情报采集专家。模拟从公开威胁情报源中采集到的情报。\n\n"
-            "返回JSON数组，每个元素包含：\n"
-            "- content: 情报内容\n"
-            "- source_url: 来源URL\n"
-            "- metadata: 元数据对象，包含source=llm_simulated、collected_at等字段\n\n"
-            "生成2-3条情报。只返回JSON数组。"
-        )
-        keyword_str = "、".join(keywords) if keywords else "黑灰产"
-        prompt = f"关键词：{keyword_str}\n请生成相关威胁情报。"
-
-        try:
-            result = await self.llm.generate_json(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.7,
-            )
-            items = []
-            if isinstance(result, list):
-                for item in result[:max_results]:
-                    if isinstance(item, dict):
-                        item.setdefault("source_url", "https://threat-intel.example/feed")
-                        item.setdefault("metadata", {
-                            "source": "llm_simulated",
-                            "collected_at": datetime.utcnow().isoformat(),
-                        })
-                        items.append(item)
-            return items
-        except Exception as exc:
-            self.logger.error(f"LLM fallback also failed: {exc}")
-            return []

@@ -4,16 +4,14 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from app.core.llm import LLMService
 from app.config import settings
 
 
 class ForumCollector:
     OTX_API_BASE = "https://otx.alienvault.com/api/v1"
-    PHISHTANK_API = "https://data.phishtank.com/data/online-valid.json"
+    CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
-    def __init__(self, llm: LLMService):
-        self.llm = llm
+    def __init__(self):
         self.logger = logger.bind(collector="forum")
         self._session: Optional[aiohttp.ClientSession] = None
         self._otx_key = settings.ALIENVAULT_OTX_KEY
@@ -38,7 +36,7 @@ class ForumCollector:
         time_range: Optional[Dict] = None,
         **kwargs: Any,
     ) -> List[Dict]:
-        self.logger.info(f"Collecting from Forums/ThreatFeeds: keywords={keywords}, max_results={max_results}")
+        self.logger.info(f"Collecting from Forum/ThreatFeeds: keywords={keywords}, max_results={max_results}")
 
         items: List[Dict] = []
 
@@ -50,17 +48,21 @@ class ForumCollector:
 
         if len(items) < max_results:
             try:
-                phish_items = await self._collect_phishtank(max_results - len(items))
-                items.extend(phish_items)
+                cisa_items = await self._collect_cisa_kev(max_results - len(items))
+                items.extend(cisa_items)
             except Exception as exc:
-                self.logger.warning(f"PhishTank failed: {exc}")
+                self.logger.warning(f"CISA KEV failed: {exc}")
 
         if items:
-            self.logger.info(f"Collected {len(items)} items from real threat feeds")
-            return items[:max_results]
+            self.logger.info(f"Collected {len(items)} real items from threat feeds")
+        else:
+            self.logger.error(
+                "All threat feed sources failed. "
+                "For AlienVault OTX: register at https://otx.alienvault.com and set ALIENVAULT_OTX_KEY in .env. "
+                "CISA KEV should work without a key."
+            )
 
-        self.logger.warning("All real forum/threat feeds failed, falling back to LLM analysis")
-        return await self._llm_analyze(keywords, max_results)
+        return items[:max_results]
 
     async def _collect_otx(self, keywords: List[str], max_results: int) -> List[Dict]:
         session = await self._get_session()
@@ -128,82 +130,43 @@ class ForumCollector:
 
         return items
 
-    async def _collect_phishtank(self, max_results: int) -> List[Dict]:
+    async def _collect_cisa_kev(self, max_results: int) -> List[Dict]:
         session = await self._get_session()
         items: List[Dict] = []
 
         try:
-            async with session.get(self.PHISHTANK_API) as resp:
+            async with session.get(self.CISA_KEV_URL) as resp:
                 if resp.status != 200:
-                    self.logger.warning(f"PhishTank returned {resp.status}")
+                    self.logger.warning(f"CISA KEV returned {resp.status}")
                     return items
                 data = await resp.json(content_type=None)
-                if not isinstance(data, list):
-                    return items
+                vulns = data.get("vulnerabilities", [])
 
-                for entry in data[:max_results]:
-                    url = entry.get("url", "")
-                    target = entry.get("target", "")
-                    phish_id = entry.get("phish_id", "")
+                for vuln in vulns[:max_results]:
+                    cve_id = vuln.get("cveID", "")
+                    product = vuln.get("product", "")
+                    vuln_type = vuln.get("vulnerabilityName", "")
+                    date_added = vuln.get("dateAdded", "")
 
-                    content = f"[PhishTank] 钓鱼网站: {url}"
-                    if target:
-                        content += f" | 目标: {target}"
+                    content = f"[CISA KEV] 已知被利用漏洞: {cve_id}"
+                    if vuln_type:
+                        content += f" | {vuln_type}"
+                    if product:
+                        content += f" | 产品: {product}"
 
                     items.append({
                         "content": content,
-                        "source_url": f"https://www.phishtank.com/phish_detail.php?phish_id={phish_id}",
+                        "source_url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
                         "metadata": {
-                            "source": "phishtank",
-                            "phish_url": url,
-                            "target": target,
-                            "phish_id": str(phish_id),
+                            "source": "cisa_kev",
+                            "cve_id": cve_id,
+                            "product": product,
+                            "vulnerability_name": vuln_type,
+                            "date_added": date_added,
                             "collected_at": datetime.now(timezone.utc).isoformat(),
                         },
                     })
         except Exception as exc:
-            self.logger.warning(f"PhishTank collection failed: {exc}")
+            self.logger.warning(f"CISA KEV collection failed: {exc}")
 
         return items
-
-    async def _llm_analyze(self, keywords: List[str], max_results: int) -> List[Dict]:
-        system_prompt = (
-            "你是一个黑灰产情报分析专家。基于给定的关键词，分析当前可能存在的黑灰产威胁趋势。\n\n"
-            "返回JSON数组，每个元素包含：\n"
-            "- content: 基于关键词推断的可能威胁情报内容\n"
-            "- source_url: 留空字符串\n"
-            "- metadata: 元数据对象，必须包含source='llm_analysis'、analysis_type='keyword_inference'、collected_at等字段\n\n"
-            "生成2-5条分析结果。只返回JSON数组。"
-        )
-        keyword_str = "、".join(keywords) if keywords else "黑灰产"
-        prompt = f"关键词：{keyword_str}\n请基于这些关键词分析可能的论坛/社区黑灰产威胁情报。"
-
-        try:
-            result = await self.llm.generate_json(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.7,
-            )
-            items = []
-            if isinstance(result, list):
-                for item in result[:max_results]:
-                    if isinstance(item, dict):
-                        item.setdefault("source_url", "")
-                        item.setdefault("metadata", {
-                            "source": "llm_analysis",
-                            "analysis_type": "keyword_inference",
-                            "collected_at": datetime.now(timezone.utc).isoformat(),
-                        })
-                        items.append(item)
-            elif isinstance(result, dict):
-                result.setdefault("source_url", "")
-                result.setdefault("metadata", {
-                    "source": "llm_analysis",
-                    "analysis_type": "keyword_inference",
-                    "collected_at": datetime.now(timezone.utc).isoformat(),
-                })
-                items.append(result)
-            return items
-        except Exception as exc:
-            self.logger.error(f"Forum LLM analysis failed: {exc}")
-            return []

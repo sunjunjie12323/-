@@ -123,10 +123,10 @@ async def _initialize_services(app: FastAPI):
     from app.collectors.darkweb_collector import DarkWebCollector
     from app.collectors.realtime_collector import RealTimeCollector
 
-    telegram_collector = TelegramCollector(llm=llm)
-    forum_collector = ForumCollector(llm=llm)
-    wechat_collector = WeChatCollector(llm=llm)
-    darkweb_collector = DarkWebCollector(llm=llm)
+    telegram_collector = TelegramCollector()
+    forum_collector = ForumCollector()
+    wechat_collector = WeChatCollector()
+    darkweb_collector = DarkWebCollector()
     realtime_collector = RealTimeCollector(llm=llm)
 
     app.state.telegram_collector = telegram_collector
@@ -247,10 +247,11 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized successfully")
 
     try:
-        from app.db.seed import fix_seed_sources
+        from app.db.seed import fix_seed_sources, seed_from_real_data
         await fix_seed_sources()
+        await seed_from_real_data()
     except Exception as exc:
-        logger.warning(f"Seed source fix skipped: {exc}")
+        logger.warning(f"Seed operations skipped: {exc}")
 
     await _initialize_services(app)
     logger.info("All services initialized successfully")

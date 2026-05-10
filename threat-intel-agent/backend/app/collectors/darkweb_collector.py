@@ -4,28 +4,24 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from app.core.llm import LLMService
 from app.config import settings
 
 
 class DarkWebCollector:
     URLHAUS_API = "https://urlhaus-api.abuse.ch/v1/urls/recent/"
-    ABUSEIPDB_API = "https://api.abuseipdb.com/api/v2/check"
-    HIBP_API = "https://haveibeenpwned.com/api/v3/breaches"
+    ABUSE_CH_MALWARE_BAZAAR = "https://mb-api.abuse.ch/api/v1/"
 
-    def __init__(self, llm: LLMService):
-        self.llm = llm
+    def __init__(self):
         self.logger = logger.bind(collector="darkweb")
         self._session: Optional[aiohttp.ClientSession] = None
-        self._abuseipdb_key = settings.ABUSEIPDB_API_KEY
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=30)
-            headers = {"User-Agent": "ThreatIntelAgent/1.0"}
-            if self._abuseipdb_key:
-                headers["Key"] = self._abuseipdb_key
-            self._session = aiohttp.ClientSession(timeout=timeout, headers=headers)
+            self._session = aiohttp.ClientSession(
+                timeout=timeout,
+                headers={"User-Agent": "ThreatIntelAgent/1.0"},
+            )
         return self._session
 
     async def close(self):
@@ -51,17 +47,21 @@ class DarkWebCollector:
 
         if len(items) < max_results:
             try:
-                hibp_items = await self._collect_hibp(max_results - len(items))
-                items.extend(hibp_items)
+                malware_items = await self._collect_malware_bazaar(max_results - len(items))
+                items.extend(malware_items)
             except Exception as exc:
-                self.logger.warning(f"HIBP failed: {exc}")
+                self.logger.warning(f"MalwareBazaar failed: {exc}")
 
         if items:
-            self.logger.info(f"Collected {len(items)} items from real dark web/threat feeds")
-            return items[:max_results]
+            self.logger.info(f"Collected {len(items)} real items from dark web/threat feeds")
+        else:
+            self.logger.error(
+                "All dark web/threat feed sources failed. "
+                "URLhaus and MalwareBazaar are free APIs that should work without authentication. "
+                "Check network connectivity."
+            )
 
-        self.logger.warning("All real dark web/threat feeds failed, falling back to LLM analysis")
-        return await self._llm_analyze(keywords, max_results)
+        return items[:max_results]
 
     async def _collect_urlhaus(self, max_results: int) -> List[Dict]:
         session = await self._get_session()
@@ -105,93 +105,48 @@ class DarkWebCollector:
 
         return items
 
-    async def _collect_hibp(self, max_results: int) -> List[Dict]:
+    async def _collect_malware_bazaar(self, max_results: int) -> List[Dict]:
         session = await self._get_session()
         items: List[Dict] = []
 
         try:
-            headers = {
-                "User-Agent": "ThreatIntelAgent/1.0",
-                "hibp-api-key": settings.VIRUSTOTAL_API_KEY or "",
-            }
-            async with session.get(self.HIBP_API, headers=headers) as resp:
+            payload = {"query": "get_recent", "selector": "time"}
+            async with session.post(self.ABUSE_CH_MALWARE_BAZAAR, data=payload) as resp:
                 if resp.status != 200:
-                    self.logger.warning(f"HIBP returned {resp.status}")
+                    self.logger.warning(f"MalwareBazaar returned {resp.status}")
                     return items
                 data = await resp.json(content_type=None)
-                if not isinstance(data, list):
-                    return items
+                for entry in data.get("data", [])[:max_results]:
+                    sha256 = entry.get("sha256_hash", "")
+                    malware_name = entry.get("malware", "")
+                    family = entry.get("family", "")
+                    tags = entry.get("tags", [])
+                    delivery_method = entry.get("delivery_method", "")
+                    first_seen = entry.get("first_seen_utc", "")
 
-                for breach in data[:max_results]:
-                    name = breach.get("Name", "")
-                    domain = breach.get("Domain", "")
-                    breach_date = breach.get("BreachDate", "")
-                    pwn_count = breach.get("PwnCount", 0)
-                    description = breach.get("Description", "")[:200]
-
-                    content = f"[HIBP] 数据泄露: {name}"
-                    if domain:
-                        content += f" | 域名: {domain}"
-                    if breach_date:
-                        content += f" | 日期: {breach_date}"
-                    content += f" | 影响人数: {pwn_count}"
+                    content = f"[MalwareBazaar] 恶意软件样本: {malware_name}"
+                    if family:
+                        content += f" | 家族: {family}"
+                    if delivery_method:
+                        content += f" | 传播方式: {delivery_method}"
+                    if tags:
+                        content += f" | 标签: {','.join(str(t) for t in tags[:5])}"
 
                     items.append({
                         "content": content,
-                        "source_url": f"https://haveibeenpwned.com/PwnedWebsites#{name}",
+                        "source_url": f"https://bazaar.abuse.ch/sample/{sha256}/" if sha256 else "",
                         "metadata": {
-                            "source": "hibp",
-                            "breach_name": name,
-                            "domain": domain,
-                            "breach_date": breach_date,
-                            "pwn_count": pwn_count,
-                            "description": description,
+                            "source": "malware_bazaar",
+                            "sha256": sha256,
+                            "malware_name": malware_name,
+                            "family": family,
+                            "delivery_method": delivery_method,
+                            "tags": tags[:10] if tags else [],
+                            "first_seen": first_seen,
                             "collected_at": datetime.now(timezone.utc).isoformat(),
                         },
                     })
         except Exception as exc:
-            self.logger.warning(f"HIBP collection failed: {exc}")
+            self.logger.warning(f"MalwareBazaar collection failed: {exc}")
 
         return items
-
-    async def _llm_analyze(self, keywords: List[str], max_results: int) -> List[Dict]:
-        system_prompt = (
-            "你是一个黑灰产情报分析专家。基于给定的关键词，分析当前可能存在的暗网/深网黑灰产威胁趋势。\n\n"
-            "返回JSON数组，每个元素包含：\n"
-            "- content: 基于关键词推断的可能威胁情报内容\n"
-            "- source_url: 留空字符串\n"
-            "- metadata: 元数据对象，必须包含source='llm_analysis'、analysis_type='keyword_inference'、collected_at等字段\n\n"
-            "生成2-5条分析结果。只返回JSON数组。"
-        )
-        keyword_str = "、".join(keywords) if keywords else "黑灰产"
-        prompt = f"关键词：{keyword_str}\n请基于这些关键词分析可能的暗网/深网黑灰产威胁情报。"
-
-        try:
-            result = await self.llm.generate_json(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.7,
-            )
-            items = []
-            if isinstance(result, list):
-                for item in result[:max_results]:
-                    if isinstance(item, dict):
-                        item.setdefault("source_url", "")
-                        item.setdefault("metadata", {
-                            "source": "llm_analysis",
-                            "analysis_type": "keyword_inference",
-                            "collected_at": datetime.now(timezone.utc).isoformat(),
-                        })
-                        items.append(item)
-            elif isinstance(result, dict):
-                result.setdefault("source_url", "")
-                result.setdefault("metadata", {
-                    "source": "llm_analysis",
-                    "analysis_type": "keyword_inference",
-                    "collected_at": datetime.now(timezone.utc).isoformat(),
-                })
-                items.append(result)
-            return items
-        except Exception as exc:
-            self.logger.error(f"DarkWeb LLM analysis failed: {exc}")
-            return []
