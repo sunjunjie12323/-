@@ -165,7 +165,25 @@ const Intelligence: React.FC = () => {
       dataIndex: 'source',
       key: 'source',
       width: 100,
-      render: (source: string | null) => source ? <Tag>{source}</Tag> : <Text type="secondary">—</Text>,
+      render: (source: string | null) => {
+        if (!source) return <Text type="secondary">—</Text>;
+        const colorMap: Record<string, string> = {
+          seed: 'orange',
+          llm_simulated: 'gold',
+          urlhaus: 'green',
+          alienvault: 'cyan',
+          cisa: 'blue',
+          telegram: 'purple',
+          forum: 'geekblue',
+          wechat: 'green',
+          darkweb: 'red',
+        };
+        const labelMap: Record<string, string> = {
+          seed: '种子数据',
+          llm_simulated: 'AI模拟',
+        };
+        return <Tag color={colorMap[source] || 'default'}>{labelMap[source] || source}</Tag>;
+      },
     },
     {
       title: '内容',

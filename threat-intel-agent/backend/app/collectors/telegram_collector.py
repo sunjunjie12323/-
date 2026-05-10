@@ -28,7 +28,7 @@ class TelegramCollector:
             "返回JSON数组，每个元素包含：\n"
             "- content: 情报内容（包含黑话、暗语等真实特征，模拟Telegram消息风格）\n"
             "- source_url: 来源URL（模拟Telegram链接）\n"
-            "- metadata: 元数据对象，包含channel_name、author、message_id等字段\n\n"
+            "- metadata: 元数据对象，必须包含source='llm_simulated'、channel_name、author、message_id、collected_at等字段\n\n"
             "生成2-5条模拟情报。只返回JSON数组，不要其他内容。"
         )
         keyword_str = "、".join(keywords) if keywords else "黑灰产"
@@ -51,6 +51,7 @@ class TelegramCollector:
                     if isinstance(item, dict):
                         item.setdefault("source_url", "https://t.me/channel_unknown")
                         item.setdefault("metadata", {
+                            "source": "llm_simulated",
                             "channel_name": "simulated_channel",
                             "author": "unknown",
                             "message_id": uuid4().hex[:8],
@@ -60,6 +61,7 @@ class TelegramCollector:
             elif isinstance(result, dict):
                 result.setdefault("source_url", "https://t.me/channel_unknown")
                 result.setdefault("metadata", {
+                    "source": "llm_simulated",
                     "channel_name": "simulated_channel",
                     "author": "unknown",
                     "message_id": uuid4().hex[:8],

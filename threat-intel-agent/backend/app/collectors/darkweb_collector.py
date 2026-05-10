@@ -28,7 +28,7 @@ class DarkWebCollector:
             "返回JSON数组，每个元素包含：\n"
             "- content: 情报内容（包含黑话、暗语等真实特征，模拟暗网市场帖子风格）\n"
             "- source_url: 来源URL（模拟.onion链接）\n"
-            "- metadata: 元数据对象，包含market_name、vendor、listing_id、price等字段\n\n"
+            "- metadata: 元数据对象，必须包含source='llm_simulated'、market_name、vendor、listing_id、price、collected_at等字段\n\n"
             "生成2-5条模拟情报。只返回JSON数组，不要其他内容。"
         )
         keyword_str = "、".join(keywords) if keywords else "黑灰产"
@@ -51,6 +51,7 @@ class DarkWebCollector:
                     if isinstance(item, dict):
                         item.setdefault("source_url", "http://example.onion/listing/unknown")
                         item.setdefault("metadata", {
+                            "source": "llm_simulated",
                             "market_name": "simulated_market",
                             "vendor": "anonymous",
                             "listing_id": uuid4().hex[:8],
@@ -61,6 +62,7 @@ class DarkWebCollector:
             elif isinstance(result, dict):
                 result.setdefault("source_url", "http://example.onion/listing/unknown")
                 result.setdefault("metadata", {
+                    "source": "llm_simulated",
                     "market_name": "simulated_market",
                     "vendor": "anonymous",
                     "listing_id": uuid4().hex[:8],

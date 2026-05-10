@@ -237,6 +237,12 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized successfully")
 
+    try:
+        from app.db.seed import fix_seed_sources
+        await fix_seed_sources()
+    except Exception as exc:
+        logger.warning(f"Seed source fix skipped: {exc}")
+
     await _initialize_services(app)
     logger.info("All services initialized successfully")
 

@@ -24,154 +24,154 @@ from app.models.pir import PIR, PIRStatus, PIRPriority
 
 RAW_INTELLIGENCE_DATA = [
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "【跑分平台】日结日清，佣金5%-8%，支持支付宝微信银行卡，量大从优，TG: @paofen888",
-        "metadata": {"group": "黑产交流群", "author": "跑分大佬"},
+        "metadata": {"group": "黑产交流群", "author": "跑分大佬", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "出四件套，身份证+银行卡+手机卡+U盾，全部实名，价格私聊，量大优惠 TG: @sijiantao_shop",
-        "metadata": {"group": "料子交易群", "author": "料主A"},
+        "metadata": {"group": "料子交易群", "author": "料主A", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "猫池设备出售，32口64口128口都有，支持接码平台对接，稳定不掉线，售后保障",
-        "metadata": {"group": "黑产工具群", "author": "设备王"},
+        "metadata": {"group": "黑产工具群", "author": "设备王", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "求购拦截卡，需要移动联通电信各100张，要求能收到验证码，价格好说，长期合作",
-        "metadata": {"forum": "暗网论坛A", "author": "匿名用户3821"},
+        "metadata": {"forum": "暗网论坛A", "author": "匿名用户3821", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "杀猪盘项目招募：提供话术模板+人设包装+资金盘搭建，月入10万+，有经验优先",
-        "metadata": {"forum": "灰产论坛B", "author": "盘总"},
+        "metadata": {"forum": "灰产论坛B", "author": "盘总", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "警惕新型套路贷：以低息贷款为诱饵，要求借款人提供银行卡和手机卡，随后通过猫池设备截取验证码，盗取借款人资金",
-        "metadata": {"account": "安全研究", "title": "新型套路贷手法分析"},
+        "metadata": {"account": "安全研究", "title": "新型套路贷手法分析", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "近期发现大量菠菜网站利用AI换脸技术进行真人认证绕过，建议加强活体检测的防伪能力",
-        "metadata": {"account": "反欺诈中心", "title": "AI换脸绕过实名认证预警"},
+        "metadata": {"account": "反欺诈中心", "title": "AI换脸绕过实名认证预警", "source": "seed"},
     },
     {
-        "source": "darkweb",
+        "source": "seed",
         "content": "Selling fresh CN fullz (name+ID+phone+bank), 5000+ records available, sample on request, payment in BTC",
-        "metadata": {"market": "DarkMarket X", "vendor": "data_vendor_99"},
+        "metadata": {"market": "DarkMarket X", "vendor": "data_vendor_99", "source": "seed"},
     },
     {
-        "source": "darkweb",
+        "source": "seed",
         "content": "RAT malware for sale, supports Android/iOS/Windows, remote control + keylogging + screen capture, $500/license",
-        "metadata": {"market": "DarkMarket X", "vendor": "malware_pro"},
+        "metadata": {"market": "DarkMarket X", "vendor": "malware_pro", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "接码平台更新：新增东南亚号码，支持WhatsApp/Telegram/微信注册，0.5元/条，API接口可用",
-        "metadata": {"group": "接码服务群", "author": "码商小王"},
+        "metadata": {"group": "接码服务群", "author": "码商小王", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "水房通道稳定，支持大额，日处理100万+，费率3%，T+0到账，需要的私",
-        "metadata": {"forum": "暗网论坛A", "author": "水房老板"},
+        "metadata": {"forum": "暗网论坛A", "author": "水房老板", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "养号服务：提供各平台老号/白号，已实名认证，可接码，价格1-50元不等，量大优惠",
-        "metadata": {"group": "账号交易群", "author": "号商张三"},
+        "metadata": {"group": "账号交易群", "author": "号商张三", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "黑SEO技术分享：利用蜘蛛池+站群快速提升排名，月入5万+，适合有基础的朋友",
-        "metadata": {"account": "技术分享", "title": "黑SEO实战教程"},
+        "metadata": {"account": "技术分享", "title": "黑SEO实战教程", "source": "seed"},
     },
     {
-        "source": "darkweb",
+        "source": "seed",
         "content": "Phishing kit for Chinese banks (ICBC/CMB/BOC), includes SMS gateway + domain + hosting, $2000/kit",
-        "metadata": {"market": "DarkMarket Y", "vendor": "phish_master"},
+        "metadata": {"market": "DarkMarket Y", "vendor": "phish_master", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "撞库工具更新：支持多平台批量检测，速度10万/小时，准确率95%+，自带代理池管理",
-        "metadata": {"forum": "灰产论坛B", "author": "工具开发者"},
+        "metadata": {"forum": "灰产论坛B", "author": "工具开发者", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "色流变现项目：日引流1000+，转化率5%，客单价200，日入1万+，提供全套话术和素材",
-        "metadata": {"group": "流量变现群", "author": "流量王"},
+        "metadata": {"group": "流量变现群", "author": "流量王", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "资金盘预警：XX国际宣称日收益3%，疑似庞氏骗局，已有大量投资者无法提现，请远离",
-        "metadata": {"account": "金融防骗", "title": "XX国际资金盘预警"},
+        "metadata": {"account": "金融防骗", "title": "XX国际资金盘预警", "source": "seed"},
     },
     {
-        "source": "darkweb",
+        "source": "seed",
         "content": "DDoS-for-hire service, up to 500Gbps, $100/hour, supports custom targets, 24/7 support",
-        "metadata": {"market": "DarkMarket Y", "vendor": "ddos_king"},
+        "metadata": {"market": "DarkMarket Y", "vendor": "ddos_king", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "脱库数据出售：某电商平台500万用户数据，含手机号+地址+购买记录，价格面议",
-        "metadata": {"forum": "暗网论坛A", "author": "数据库管理员"},
+        "metadata": {"forum": "暗网论坛A", "author": "数据库管理员", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "代购服务：可代购各类虚拟商品和充值卡，支持批量，价格优惠，长期合作优先",
-        "metadata": {"group": "代购服务群", "author": "代购小哥"},
+        "metadata": {"group": "代购服务群", "author": "代购小哥", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "裸条借贷受害者案例分析：犯罪分子通过借贷宝等平台，要求借款人提供裸照作为抵押，随后威胁敲诈",
-        "metadata": {"account": "法律援助", "title": "裸条借贷案例警示"},
+        "metadata": {"account": "法律援助", "title": "裸条借贷案例警示", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "过桥资金提供：短期周转，日息0.5%，额度1-100万，当天放款，需要四件套做担保",
-        "metadata": {"forum": "灰产论坛B", "author": "资金中介"},
+        "metadata": {"forum": "灰产论坛B", "author": "资金中介", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "肉鸡出售：国内高质量肉鸡1万台，可做DDoS/挖矿/发信，稳定性好，价格0.5元/台",
-        "metadata": {"group": "黑产工具群", "author": "肉鸡供应商"},
+        "metadata": {"group": "黑产工具群", "author": "肉鸡供应商", "source": "seed"},
     },
     {
-        "source": "darkweb",
+        "source": "seed",
         "content": "Custom malware development service, can bypass most AV/EDR, delivery in 7 days, price negotiable",
-        "metadata": {"market": "DarkMarket X", "vendor": "cod3r"},
+        "metadata": {"market": "DarkMarket X", "vendor": "cod3r", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "近期薅羊毛黑产团伙利用AI批量注册账号，通过虚拟手机号接码，单日可薅上万元优惠",
-        "metadata": {"account": "电商安全", "title": "AI薅羊毛黑产预警"},
+        "metadata": {"account": "电商安全", "title": "AI薅羊毛黑产预警", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "菠菜盘口搭建：提供全套系统+支付通道+域名+服务器，3天上线，包售后，价格2万起",
-        "metadata": {"group": "菠菜交流群", "author": "盘口技术"},
+        "metadata": {"group": "菠菜交流群", "author": "盘口技术", "source": "seed"},
     },
     {
-        "source": "forum",
+        "source": "seed",
         "content": "套现渠道：信用卡/花呗/白条套现，费率3-5%，当天到账，大额可优惠",
-        "metadata": {"forum": "灰产论坛B", "author": "套现王"},
+        "metadata": {"forum": "灰产论坛B", "author": "套现王", "source": "seed"},
     },
     {
-        "source": "telegram",
+        "source": "seed",
         "content": "黑料出售：各类隐私数据，含开房记录/快递信息/学信网数据，按条计费，量大从优",
-        "metadata": {"group": "料子交易群", "author": "数据贩子"},
+        "metadata": {"group": "料子交易群", "author": "数据贩子", "source": "seed"},
     },
     {
-        "source": "darkweb",
+        "source": "seed",
         "content": "Zero-day exploit for popular Chinese software, unpatched, $50000, verification available",
-        "metadata": {"market": "DarkMarket X", "vendor": "0day_hunter"},
+        "metadata": {"market": "DarkMarket X", "vendor": "0day_hunter", "source": "seed"},
     },
     {
-        "source": "wechat",
+        "source": "seed",
         "content": "反诈提醒：近期出现冒充公检法诈骗新变种，骗子利用AI语音克隆技术模仿亲友声音进行诈骗",
-        "metadata": {"account": "反诈中心", "title": "AI语音克隆诈骗预警"},
+        "metadata": {"account": "反诈中心", "title": "AI语音克隆诈骗预警", "source": "seed"},
     },
 ]
 
@@ -332,6 +332,17 @@ async def seed_database():
     logger.info(f"Database seeded: {len(RAW_INTELLIGENCE_DATA)} intelligence items, "
                 f"{len(entities_data)} entities, {len(relations_data)} relations, "
                 f"{len(pirs_data)} PIRs")
+
+
+async def fix_seed_sources():
+    from sqlalchemy import text
+    async with async_session_factory() as session:
+        result = await session.execute(
+            text("UPDATE raw_intelligence SET source = 'seed' WHERE source IN ('telegram', 'forum', 'wechat', 'darkweb') AND metadata_json LIKE '%seed%'")
+        )
+        if result.rowcount > 0:
+            logger.info(f"Fixed {result.rowcount} seed records with correct source label")
+        await session.commit()
 
 
 if __name__ == "__main__":

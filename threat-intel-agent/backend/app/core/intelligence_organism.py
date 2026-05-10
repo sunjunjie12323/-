@@ -4,7 +4,7 @@ import math
 import os
 from collections import deque
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -249,7 +249,7 @@ class IntelligenceOrganismEngine:
                     "organisms": {oid: o.to_dict() for oid, o in self.organisms.items()},
                     "prediction_trackers": {pid: p.to_dict() for pid, p in self.prediction_trackers.items()},
                     "genes": {gid: g.to_dict() for gid, g in self.genes.items()},
-                    "saved_at": datetime.utcnow().isoformat(),
+                    "saved_at": datetime.now(timezone.utc).isoformat(),
                 }
                 tmp_path = persist_path.with_suffix(".tmp")
                 with open(tmp_path, "w", encoding="utf-8") as f:
@@ -262,7 +262,7 @@ class IntelligenceOrganismEngine:
     async def spawn_organism(
         self, intelligence_id: str, species: str, initial_data: Dict
     ) -> IntelligenceOrganism:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         born_at = now.isoformat()
         half_life = SPECIES_HALF_LIFE_HOURS.get(species, DEFAULT_HALF_LIFE)
         next_check = (now + timedelta(hours=max(half_life * 0.1, 1))).isoformat()
@@ -336,7 +336,7 @@ class IntelligenceOrganismEngine:
             logger.warning(f"Organism {organism_id} not found for evolution")
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         before_state = organism.current_state.copy()
         has_significant_change = self._detect_significant_change(before_state, new_data)
 
@@ -409,7 +409,7 @@ class IntelligenceOrganismEngine:
                 generation=0,
             )
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         born_at = datetime.fromisoformat(organism.born_at)
         age_hours = max((now - born_at).total_seconds() / 3600, 0)
         organism.current_age_hours = age_hours
@@ -553,7 +553,7 @@ class IntelligenceOrganismEngine:
         predicted_steps: List[Dict],
         validation_window_hours: float = 168,
     ) -> PredictionTracker:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         prediction_id = uuid4().hex
         deadline = now + timedelta(hours=validation_window_hours)
 
@@ -577,7 +577,7 @@ class IntelligenceOrganismEngine:
         return tracker
 
     async def validate_predictions(self) -> List[ValidationResult]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         results: List[ValidationResult] = []
 
         for tracker_id, tracker in list(self.prediction_trackers.items()):
@@ -749,7 +749,7 @@ class IntelligenceOrganismEngine:
         if not organism:
             raise ValueError(f"Organism {organism_id} not found")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         patterns = self._extract_patterns(organism)
         associations = self._extract_associations(organism)
         attack_chains = self._extract_attack_chains(organism)
@@ -927,7 +927,7 @@ class IntelligenceOrganismEngine:
             "predictions_validated": 0,
         }
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         organisms_to_archive: List[str] = []
 
         for organism_id, organism in list(self.organisms.items()):
@@ -1076,7 +1076,7 @@ class IntelligenceOrganismEngine:
             if not results:
                 return False
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             for result in results:
                 metadata = result.get("metadata", {})
                 collected_at = metadata.get("collected_at", "")

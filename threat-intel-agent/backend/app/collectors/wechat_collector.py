@@ -28,7 +28,7 @@ class WeChatCollector:
             "返回JSON数组，每个元素包含：\n"
             "- content: 情报内容（包含黑话、暗语等真实特征，模拟群聊消息风格）\n"
             "- source_url: 来源URL（留空即可）\n"
-            "- metadata: 元数据对象，包含group_name、sender、message_type等字段\n\n"
+            "- metadata: 元数据对象，必须包含source='llm_simulated'、group_name、sender、message_type、collected_at等字段\n\n"
             "生成2-5条模拟情报。只返回JSON数组，不要其他内容。"
         )
         keyword_str = "、".join(keywords) if keywords else "黑灰产"
@@ -51,6 +51,7 @@ class WeChatCollector:
                     if isinstance(item, dict):
                         item.setdefault("source_url", "")
                         item.setdefault("metadata", {
+                            "source": "llm_simulated",
                             "group_name": "simulated_group",
                             "sender": "unknown",
                             "message_type": "text",
@@ -60,6 +61,7 @@ class WeChatCollector:
             elif isinstance(result, dict):
                 result.setdefault("source_url", "")
                 result.setdefault("metadata", {
+                    "source": "llm_simulated",
                     "group_name": "simulated_group",
                     "sender": "unknown",
                     "message_type": "text",
