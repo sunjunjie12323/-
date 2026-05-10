@@ -160,6 +160,7 @@ class EntityAttribution:
         self._idx2entity: Dict[int, str] = {}
         self._relation2idx: Dict[str, int] = {}
         self._idx2relation: Dict[int, str] = {}
+        self._name2id: Dict[str, str] = {}
         self._persist_dir = "./model_data/attribution"
         os.makedirs(self._persist_dir, exist_ok=True)
         self._try_load_model()
@@ -177,6 +178,7 @@ class EntityAttribution:
             self._idx2entity = {int(v): k for k, v in self._entity2idx.items()}
             self._relation2idx = meta.get("relation2idx", {})
             self._idx2relation = {int(v): k for k, v in self._relation2idx.items()}
+            self._name2id = meta.get("name2id", {})
             logger.info(f"TransE model loaded: {self._model.n_entities} entities, {self._model.n_relations} relations")
             return True
         except Exception as exc:
@@ -193,6 +195,7 @@ class EntityAttribution:
             json.dump({
                 "entity2idx": self._entity2idx,
                 "relation2idx": self._relation2idx,
+                "name2id": self._name2id,
             }, f)
         logger.info(f"TransE model saved: {self._model.n_entities} entities")
 
@@ -208,9 +211,13 @@ class EntityAttribution:
         for idx, eid in enumerate(entities):
             self._entity2idx[eid] = idx
             self._idx2entity[idx] = eid
+            node_data = self.knowledge_graph.graph.nodes[eid]
+            entity_value = node_data.get("value", "")
+            if entity_value:
+                self._name2id[entity_value.lower()] = eid
 
         for u, v, data in self.knowledge_graph.graph.edges(data=True):
-            rtype = data.get("relation_type", "related_to")
+            rtype = data.get("type", data.get("relation_type", "related_to"))
             if rtype not in self._relation2idx:
                 ridx = len(self._relation2idx)
                 self._relation2idx[rtype] = ridx
@@ -247,19 +254,38 @@ class EntityAttribution:
         if self._model is None:
             self._try_load_model()
 
-        if self._model is None or entity_id not in self._entity2idx:
+        resolved_id = entity_id
+        if self._model is None or resolved_id not in self._entity2idx:
+            if entity_id.lower() in self._name2id:
+                resolved_id = self._name2id[entity_id.lower()]
+            else:
+                try:
+                    search_results = await self.knowledge_graph.search_entities(entity_id, limit=5)
+                    for ent in search_results:
+                        if ent.id in self._entity2idx:
+                            resolved_id = ent.id
+                            self._name2id[entity_id.lower()] = resolved_id
+                            break
+                        if ent.value.lower() == entity_id.lower() and ent.id in self._entity2idx:
+                            resolved_id = ent.id
+                            self._name2id[entity_id.lower()] = resolved_id
+                            break
+                except Exception:
+                    pass
+
+        if self._model is None or resolved_id not in self._entity2idx:
             return []
 
-        entity_idx = self._entity2idx[entity_id]
+        entity_idx = self._entity2idx[resolved_id]
         entity_emb = self._model.get_entity_embedding(entity_idx)
 
-        source_entity = await self.knowledge_graph.get_entity(entity_id)
+        source_entity = await self.knowledge_graph.get_entity(resolved_id)
         source_type = source_entity.type.value if source_entity and hasattr(source_entity.type, 'value') else "unknown"
         source_platform = self._infer_platform(source_type)
 
         similarities = []
         for other_id, other_idx in self._entity2idx.items():
-            if other_id == entity_id:
+            if other_id == resolved_id:
                 continue
             other_emb = self._model.get_entity_embedding(other_idx)
             norm_e = np.linalg.norm(entity_emb)
@@ -278,10 +304,10 @@ class EntityAttribution:
             target_type = target_entity.type.value if target_entity and hasattr(target_entity.type, 'value') else "unknown"
             target_platform = self._infer_platform(target_type)
 
-            evidence = self._generate_evidence(entity_id, target_id, sim, source_type, target_type)
+            evidence = self._generate_evidence(resolved_id, target_id, sim, source_type, target_type)
 
             results.append(AttributionResult(
-                source_entity_id=entity_id,
+                source_entity_id=resolved_id,
                 target_entity_id=target_id,
                 similarity=round(sim, 4),
                 source_platform=source_platform,
@@ -290,7 +316,7 @@ class EntityAttribution:
                 confidence=round(sim * 0.9, 4),
             ))
 
-        logger.info(f"TransE attribution: {len(results)} matches for entity {entity_id[:8]}")
+        logger.info(f"TransE attribution: {len(results)} matches for entity {resolved_id[:8]}")
         return results
 
     def _infer_platform(self, entity_type: str) -> str:
@@ -327,7 +353,8 @@ class EntityAttribution:
         return list(src_relations & tgt_relations - {""})
 
     async def find_similar_entities(self, entity_id: str, top_k: int = 5) -> List[AttributionResult]:
-        return await self.attribute_entity(entity_id, threshold=0.3)[:top_k]
+        results = await self.attribute_entity(entity_id, threshold=0.3)
+        return results[:top_k]
 
     async def build_entity_profile(self, entity_id: str) -> EntityProfile:
         entity = await self.knowledge_graph.get_entity(entity_id)

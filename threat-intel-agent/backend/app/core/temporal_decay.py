@@ -163,9 +163,10 @@ class TemporalDecay:
 
         if len(self._observations[threat_type]) >= self.MIN_OBSERVATIONS_FOR_MLE:
             estimated = self._estimate_half_life_mle(threat_type)
-            if estimated is not None and estimated > 0:
+            if estimated is not None and 1.0 <= estimated <= 8760.0:
                 old_hl = self._half_lives.get(threat_type, DEFAULT_HALF_LIVES.get("default", 168.0))
                 self._half_lives[threat_type] = 0.7 * estimated + 0.3 * old_hl
+                self._half_lives[threat_type] = max(1.0, min(self._half_lives[threat_type], 8760.0))
                 logger.info(f"MLE updated half-life for {threat_type}: {old_hl:.1f}h -> {self._half_lives[threat_type]:.1f}h")
                 self._save_learned_half_lives()
 
@@ -175,6 +176,11 @@ class TemporalDecay:
             return None
 
         initial_hl = self._half_lives.get(threat_type, DEFAULT_HALF_LIVES.get("default", 168.0))
+
+        data_driven_hl = self._estimate_half_life_from_data(obs)
+        if data_driven_hl is not None:
+            initial_hl = data_driven_hl
+
         initial_conf = obs[0][1] if obs[0][1] > 0 else 0.8
 
         def neg_log_likelihood(log_hl):
@@ -197,14 +203,47 @@ class TemporalDecay:
                 neg_log_likelihood,
                 x0=np.log(initial_hl),
                 method="L-BFGS-B",
-                bounds=[(np.log(1.0), np.log(87600.0))],
+                bounds=[(np.log(1.0), np.log(8760.0))],
             )
             if result.success:
-                return float(np.exp(result.x[0]))
+                estimated = float(np.exp(result.x[0]))
+                if 1.0 <= estimated <= 8760.0:
+                    return estimated
         except Exception as exc:
             logger.warning(f"MLE estimation failed for {threat_type}: {exc}")
 
+        if data_driven_hl is not None:
+            return data_driven_hl
+
         return None
+
+    def _estimate_half_life_from_data(self, obs: List[Tuple[float, float]]) -> Optional[float]:
+        if len(obs) < 2:
+            return None
+
+        initial_conf = obs[0][1] if obs[0][1] > 0 else 0.8
+
+        half_life_estimates = []
+        weights = []
+        for elapsed, observed in obs:
+            if observed <= 0 or elapsed <= 0 or initial_conf <= 0:
+                continue
+            ratio = observed / initial_conf
+            if ratio <= 0 or ratio >= 1:
+                continue
+            hl = elapsed / (-np.log2(ratio))
+            if 1.0 <= hl <= 8760.0:
+                half_life_estimates.append(hl)
+                weights.append(observed)
+
+        if not half_life_estimates:
+            return None
+
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return None
+
+        return sum(h * w for h, w in zip(half_life_estimates, weights)) / total_weight
 
     async def batch_decay(self) -> DecayBatch:
         items: List[DecayItem] = []

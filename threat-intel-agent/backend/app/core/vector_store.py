@@ -7,15 +7,15 @@ from chromadb.config import Settings as ChromaSettings
 from loguru import logger
 
 from app.config import settings
-from app.core.llm import LLMService
+from app.core.local_embedding import LocalEmbeddingEngine
 
 
 class VectorStore:
     COLLECTION_NAMES = ("intelligence", "entities", "blacktalk")
 
-    def __init__(self, persist_dir: str, llm: LLMService):
+    def __init__(self, persist_dir: str, embedding_engine: LocalEmbeddingEngine = None):
         self.persist_dir = persist_dir
-        self.llm = llm
+        self._embedding = embedding_engine or LocalEmbeddingEngine()
         self._client = chromadb.PersistentClient(
             path=persist_dir,
             settings=ChromaSettings(anonymized_telemetry=False),
@@ -29,7 +29,8 @@ class VectorStore:
             )
         logger.info(
             f"VectorStore initialized at {persist_dir} "
-            f"with collections: {list(self._collections.keys())}"
+            f"with collections: {list(self._collections.keys())} "
+            f"(embedding: local TF-IDF+SVD, dim={self._embedding.dim})"
         )
 
     def _get_collection(self, collection: str) -> chromadb.Collection:
@@ -41,38 +42,10 @@ class VectorStore:
         return self._collections[collection]
 
     async def _embed(self, text: str) -> List[float]:
-        try:
-            result = await self.llm.embed(text)
-            if result and not any(math.isnan(x) or math.isinf(x) for x in result):
-                return result
-        except Exception as exc:
-            logger.debug(f"LLM embed failed, using fallback: {exc}")
-        return self._fallback_embed(text)
+        return self._embedding.embed(text)
 
     async def _embed_batch(self, texts: List[str]) -> List[List[float]]:
-        try:
-            results = await self.llm.embed_batch(texts)
-            if results and all(
-                r and not any(math.isnan(x) or math.isinf(x) for x in r)
-                for r in results
-            ):
-                return results
-        except Exception as exc:
-            logger.debug(f"LLM embed_batch failed, using fallback: {exc}")
-        return [self._fallback_embed(t) for t in texts]
-
-    def _fallback_embed(self, text: str) -> List[float]:
-        import hashlib as _hashlib
-        dim = 1536
-        h = _hashlib.sha256(text.encode("utf-8")).digest()
-        seed = int.from_bytes(h[:8], "big")
-        import random as _random
-        rng = _random.Random(seed)
-        vec = [rng.gauss(0, 1) for _ in range(dim)]
-        norm = math.sqrt(sum(x * x for x in vec))
-        if norm < 1e-10:
-            return [0.0] * dim
-        return [x / norm for x in vec]
+        return self._embedding.embed_batch(texts)
 
     async def add_intelligence(self, intel_id: str, content: str, metadata: dict):
         try:

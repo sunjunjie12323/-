@@ -932,13 +932,13 @@ class IntelligenceOrganismEngine:
             if not organism.is_alive:
                 continue
 
-            check_time = datetime.fromisoformat(organism.next_check_at)
-            if check_time.tzinfo is None:
-                check_time = check_time.replace(tzinfo=timezone.utc)
-            if now < check_time:
-                continue
-
             results["checked"] += 1
+
+            born_at = datetime.fromisoformat(organism.born_at)
+            if born_at.tzinfo is None:
+                born_at = born_at.replace(tzinfo=timezone.utc)
+            age_hours = max((now - born_at).total_seconds() / 3600, 0)
+            organism.current_age_hours = age_hours
 
             try:
                 new_data = await self._fetch_organism_updates(organism)
@@ -958,6 +958,9 @@ class IntelligenceOrganismEngine:
                     results["reborn"] += 1
             except Exception as exc:
                 logger.warning(f"Vitality check failed for organism {organism_id}: {exc}")
+
+            next_check_delta = max(organism.half_life * 0.1, 1)
+            organism.next_check_at = (now + timedelta(hours=next_check_delta)).isoformat()
 
         for organism_id in organisms_to_archive:
             try:

@@ -1,33 +1,41 @@
-version: "3.8"
-
+version: '3.8'
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
-      - LLM_API_KEY=${LLM_API_KEY:-sk-placeholder}
-      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
-      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-gpt-4o-mini}
-      - DATABASE_URL=sqlite+aiosqlite:///./data/threat_intel.db
-      - CHROMA_PERSIST_DIR=./data/chroma
-      - GRAPH_PERSIST_PATH=./data/graph/knowledge_graph.json
-      - LOG_LEVEL=INFO
+      - DATABASE_URL=sqlite:///./threat_intel.db
+      - CHROMA_PERSIST_DIR=./chroma_data
+      - ALIENVAULT_OTX_KEY=${ALIENVAULT_OTX_KEY}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      - THREATBOOK_API_KEY=${THREATBOOK_API_KEY}
+      - QIANXIN_API_KEY=${QIANXIN_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
     volumes:
-      - backend-data:/app/data
+      - backend_data:/app/data
+      - backend_chroma:/app/chroma_data
+      - backend_graph:/app/graph_data
+      - backend_model:/app/model_data
+      - backup_data:/app/backups
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
-  backend-data:
+  backend_data:
+  backend_chroma:
+  backend_graph:
+  backend_model:
+  backup_data:

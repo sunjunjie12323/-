@@ -1,12 +1,18 @@
 import asyncio
 import json
+import os
+import shutil
+import tarfile
+import time
 import traceback
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Set
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from loguru import logger
 
 from app.api import api_router
@@ -28,6 +34,32 @@ from app.core.entity_attribution import EntityAttribution
 from app.core.temporal_decay import TemporalDecay
 from app.core.intelligence_organism import IntelligenceOrganismEngine
 from app.db.database import init_db
+
+
+class MetricsState:
+    intelligence_total: int = 0
+    search_total: int = 0
+    api_requests_total: Dict[str, int] = {}
+
+
+metrics_state = MetricsState()
+
+_audit_log_dir = Path("./logs")
+_audit_log_dir.mkdir(parents=True, exist_ok=True)
+_audit_logger = logger.bind(name="audit")
+_audit_logger.add(
+    str(_audit_log_dir / "audit.log"),
+    rotation="10 MB",
+    retention="30 days",
+    compression="gz",
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {message}",
+    filter=lambda record: record["extra"].get("name") == "audit",
+)
+
+_unauthenticated_limiter = rate_limiter.__class__(requests_per_minute=30)
+_authenticated_limiter = rate_limiter.__class__(requests_per_minute=120)
+
+_backup_task_handle: asyncio.Task | None = None
 
 
 class ConnectionManager:
@@ -65,13 +97,16 @@ async def _initialize_services(app: FastAPI):
     app.state.llm = llm
     logger.info("LLMService created")
 
-    logger.info("[2/17] Creating VectorStore...")
+    logger.info("[2/17] Creating VectorStore with local embedding engine...")
+    from app.core.local_embedding import LocalEmbeddingEngine
+    embedding_engine = LocalEmbeddingEngine(dim=256)
     vector_store = VectorStore(
         persist_dir=settings.CHROMA_PERSIST_DIR,
-        llm=llm,
+        embedding_engine=embedding_engine,
     )
     app.state.vector_store = vector_store
-    logger.info("VectorStore created")
+    app.state.embedding_engine = embedding_engine
+    logger.info(f"VectorStore created (local TF-IDF+SVD embedding, dim={embedding_engine.dim})")
 
     logger.info("[3/17] Creating KnowledgeGraph...")
     knowledge_graph = KnowledgeGraph(persist_dir="./graph_data")
@@ -243,6 +278,41 @@ async def _shutdown_services(app: FastAPI):
     logger.info("All services shut down")
 
 
+async def _periodic_backup(app: FastAPI):
+    while True:
+        await asyncio.sleep(6 * 3600)
+        try:
+            await _create_backup(app)
+        except Exception as exc:
+            logger.error(f"Backup task failed: {exc}")
+
+
+async def _create_backup(app: FastAPI):
+    backup_dir = Path("./backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    archive_path = backup_dir / f"backup_{timestamp}.tar.gz"
+
+    dirs_to_backup = ["./chroma_data", "./graph_data", "./model_data"]
+    db_path = Path("./threat_intel.db")
+
+    with tarfile.open(str(archive_path), "w:gz") as tar:
+        for dir_path in dirs_to_backup:
+            p = Path(dir_path)
+            if p.exists():
+                tar.add(str(p), arcname=p.name)
+        if db_path.exists():
+            tar.add(str(db_path), arcname=db_path.name)
+
+    logger.info(f"Backup created: {archive_path}")
+
+    backups = sorted(backup_dir.glob("backup_*.tar.gz"))
+    while len(backups) > 7:
+        oldest = backups.pop(0)
+        oldest.unlink()
+        logger.info(f"Removed old backup: {oldest}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Threat Intel Agent backend...")
@@ -260,7 +330,19 @@ async def lifespan(app: FastAPI):
     await _initialize_services(app)
     logger.info("All services initialized successfully")
 
+    global _backup_task_handle
+    _backup_task_handle = asyncio.create_task(_periodic_backup(app))
+    logger.info("Automatic backup task started (every 6 hours)")
+
     yield
+
+    if _backup_task_handle:
+        _backup_task_handle.cancel()
+        try:
+            await _backup_task_handle
+        except asyncio.CancelledError:
+            pass
+        logger.info("Backup task cancelled")
 
     await _shutdown_services(app)
     logger.info("Shutting down Threat Intel Agent backend...")
@@ -306,7 +388,63 @@ async def https_redirect_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    response = await rate_limiter.middleware(request, call_next)
+    if request.url.path in ("/health", "/docs", "/redoc", "/openapi.json", "/metrics"):
+        return await call_next(request)
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    client_ip = request.client.host if request.client else "unknown"
+    user_id = None
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        try:
+            from app.core.auth import decode_access_token, is_token_blacklisted
+            token = auth_header[7:]
+            if not is_token_blacklisted(token):
+                token_data = decode_access_token(token)
+                user_id = token_data.user_id
+        except Exception:
+            pass
+    if user_id:
+        allowed, retry_after = _authenticated_limiter.check_rate_limit(client_ip, user_id)
+    else:
+        allowed, retry_after = _unauthenticated_limiter.check_rate_limit(client_ip)
+    if not allowed:
+        from app.core.exceptions import RateLimitExceededException
+        exc = RateLimitExceededException(
+            detail=f"Rate limit exceeded. Retry after {retry_after:.0f} seconds.",
+            details={"retry_after_seconds": round(retry_after, 1)},
+        )
+        return JSONResponse(
+            status_code=429,
+            content={"error": exc.to_dict()},
+            headers={"Retry-After": str(int(retry_after))},
+        )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def audit_logging_middleware(request: Request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    duration_ms = (time.monotonic() - start) * 1000
+    user_id = "anonymous"
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        try:
+            from app.core.auth import decode_access_token, is_token_blacklisted
+            token = auth_header[7:]
+            if not is_token_blacklisted(token):
+                token_data = decode_access_token(token)
+                user_id = token_data.user_id
+        except Exception:
+            user_id = "invalid_token"
+    client_ip = request.client.host if request.client else "unknown"
+    endpoint = request.url.path
+    metrics_state.api_requests_total[endpoint] = metrics_state.api_requests_total.get(endpoint, 0) + 1
+    _audit_logger.info(
+        f"{request.method} {endpoint} user={user_id} ip={client_ip} "
+        f"status={response.status_code} duration={duration_ms:.1f}ms"
+    )
     return response
 
 
@@ -374,6 +512,63 @@ async def health_check(request: Request):
         "services": services_status,
         "task_queue": task_queue_stats,
     }
+
+
+@app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
+async def prometheus_metrics(request: Request):
+    active_organisms = 0
+    if hasattr(request.app.state, "intelligence_organism"):
+        try:
+            organism_engine = request.app.state.intelligence_organism
+            active_organisms = sum(
+                1 for o in getattr(organism_engine, "_organisms", {}).values()
+                if getattr(o, "is_alive", lambda: True)()
+            )
+        except Exception:
+            active_organisms = 0
+
+    graph_nodes = 0
+    graph_edges = 0
+    if hasattr(request.app.state, "knowledge_graph"):
+        try:
+            kg = request.app.state.knowledge_graph
+            graph_nodes = kg.graph.number_of_nodes() if hasattr(kg, "graph") else 0
+            graph_edges = kg.graph.number_of_edges() if hasattr(kg, "graph") else 0
+        except Exception:
+            graph_nodes = 0
+            graph_edges = 0
+
+    lines = [
+        f"# HELP threat_intel_intelligence_total Total number of intelligence items",
+        f"# TYPE threat_intel_intelligence_total counter",
+        f"threat_intel_intelligence_total {metrics_state.intelligence_total}",
+        f"",
+        f"# HELP threat_intel_search_total Total number of searches",
+        f"# TYPE threat_intel_search_total counter",
+        f"threat_intel_search_total {metrics_state.search_total}",
+        f"",
+        f"# HELP threat_intel_api_requests_total Total API requests by endpoint",
+        f"# TYPE threat_intel_api_requests_total counter",
+    ]
+    for endpoint, count in sorted(metrics_state.api_requests_total.items()):
+        safe_label = endpoint.replace("/", "_").strip("_") or "root"
+        lines.append(f'threat_intel_api_requests_total{{endpoint="{endpoint}"}} {count}')
+    lines.extend([
+        f"",
+        f"# HELP threat_intel_active_organisms Number of alive organisms",
+        f"# TYPE threat_intel_active_organisms gauge",
+        f"threat_intel_active_organisms {active_organisms}",
+        f"",
+        f"# HELP threat_intel_graph_nodes Number of graph nodes",
+        f"# TYPE threat_intel_graph_nodes gauge",
+        f"threat_intel_graph_nodes {graph_nodes}",
+        f"",
+        f"# HELP threat_intel_graph_edges Number of graph edges",
+        f"# TYPE threat_intel_graph_edges gauge",
+        f"threat_intel_graph_edges {graph_edges}",
+        f"",
+    ])
+    return "\n".join(lines)
 
 
 @app.websocket("/ws/intelligence")

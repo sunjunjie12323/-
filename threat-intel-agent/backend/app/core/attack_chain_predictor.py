@@ -156,6 +156,7 @@ ENTITY_TYPE_TO_TACTIC = {
     "vulnerability": "initial_access",
     "attack_pattern": "execution",
     "tool": "execution",
+    "ip": "command_and_control",
     "ip_address": "command_and_control",
     "domain": "command_and_control",
     "url": "initial_access",
@@ -166,8 +167,12 @@ ENTITY_TYPE_TO_TACTIC = {
     "person": "credential_access",
     "location": "reconnaissance",
     "financial_account": "credential_access",
+    "account": "credential_access",
     "website": "initial_access",
     "service": "discovery",
+    "blacktalk": "reconnaissance",
+    "crypto_wallet": "command_and_control",
+    "payment_method": "credential_access",
 }
 
 
@@ -218,14 +223,34 @@ class AttackChainPredictor:
             self._load_mitre_priors()
             return
 
+        self._load_mitre_priors()
+
+        tactic_entity_counts: Dict[str, int] = defaultdict(int)
+        for node_id in self.knowledge_graph.graph.nodes():
+            node_data = self.knowledge_graph.graph.nodes[node_id]
+            entity_type = node_data.get("type", node_data.get("entity_type", "unknown"))
+            tactic = ENTITY_TYPE_TO_TACTIC.get(entity_type, "unknown")
+            if tactic != "unknown":
+                tactic_entity_counts[tactic] += 1
+
+        total_entities = sum(tactic_entity_counts.values()) or 1
+        for src_tactic in list(self._transition_counts.keys()):
+            for dst_tactic in list(self._transition_counts[src_tactic].keys()):
+                obs_count = tactic_entity_counts.get(dst_tactic, 0)
+                obs_freq = obs_count / total_entities
+                boost = int(obs_freq * 50)
+                if boost > 0:
+                    self._transition_counts[src_tactic][dst_tactic] += boost
+                    self._total_transitions += boost
+
         for source in self.knowledge_graph.graph.nodes():
             source_entity = self.knowledge_graph.graph.nodes[source]
-            source_type = source_entity.get("entity_type", "unknown")
+            source_type = source_entity.get("type", source_entity.get("entity_type", "unknown"))
             source_tactic = ENTITY_TYPE_TO_TACTIC.get(source_type, "unknown")
 
             for _, target, data in self.knowledge_graph.graph.out_edges(source, data=True):
                 target_entity = self.knowledge_graph.graph.nodes[target]
-                target_type = target_entity.get("entity_type", "unknown")
+                target_type = target_entity.get("type", target_entity.get("entity_type", "unknown"))
                 target_tactic = ENTITY_TYPE_TO_TACTIC.get(target_type, "unknown")
 
                 if source_tactic != "unknown" and target_tactic != "unknown":
@@ -233,7 +258,7 @@ class AttackChainPredictor:
                     self._total_transitions += 1
                     transitions_learned += 1
 
-                    relation_type = data.get("relation_type", "unknown")
+                    relation_type = data.get("type", data.get("relation_type", "unknown"))
                     matching_techniques = [
                         tid for tid, tinfo in MITRE_TECHNIQUES.items()
                         if tinfo["tactic"] == target_tactic
@@ -241,9 +266,7 @@ class AttackChainPredictor:
                     if matching_techniques:
                         self._technique_counts[target_tactic][relation_type] = len(matching_techniques)
 
-        logger.info(f"Learned {transitions_learned} transitions from knowledge graph")
-        if self._total_transitions < 10:
-            self._load_mitre_priors()
+        logger.info(f"Learned {transitions_learned} transitions from knowledge graph (adjusted with {sum(tactic_entity_counts.values())} entity observations)")
         self._save_model()
 
     def _load_mitre_priors(self):
@@ -281,7 +304,7 @@ class AttackChainPredictor:
 
     def _map_entity_to_tactic(self, entity_id: str) -> str:
         if entity_id in self.knowledge_graph.graph.nodes:
-            entity_type = self.knowledge_graph.graph.nodes[entity_id].get("entity_type", "unknown")
+            entity_type = self.knowledge_graph.graph.nodes[entity_id].get("type", self.knowledge_graph.graph.nodes[entity_id].get("entity_type", "unknown"))
             return ENTITY_TYPE_TO_TACTIC.get(entity_type, "reconnaissance")
         return "reconnaissance"
 
