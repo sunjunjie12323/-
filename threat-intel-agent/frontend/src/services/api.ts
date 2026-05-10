@@ -428,4 +428,89 @@ export const agentApi = {
   },
 };
 
+export const api = {
+  zeroDay: {
+    detect: async (text: string) => {
+      const { data } = await apiClient.post('/zero-day/detect', { text });
+      return data;
+    },
+    trackDrift: async (term: string) => {
+      const { data } = await apiClient.get(`/zero-day/drift/${encodeURIComponent(term)}`);
+      return data;
+    },
+    trackMigration: async (term: string) => {
+      const { data } = await apiClient.get(`/zero-day/migration/${encodeURIComponent(term)}`);
+      return data;
+    },
+  },
+  attackPrediction: {
+    predict: async (entityId: string, depth: number = 3) => {
+      const { data } = await apiClient.post('/attack-prediction/predict', { entity_id: entityId, depth });
+      return data;
+    },
+    simulate: async (entityId: string, steps: number = 5) => {
+      const { data } = await apiClient.post('/attack-prediction/simulate', { entity_id: entityId, steps });
+      return data;
+    },
+    earlyWarning: async (entityId: string) => {
+      const { data } = await apiClient.post('/attack-prediction/early-warning', { entity_id: entityId });
+      return data;
+    },
+  },
+  provenance: {
+    record: async (params: any) => {
+      const { data } = await apiClient.post('/provenance/record', params);
+      return data;
+    },
+    verify: async (intelligenceId: string) => {
+      const { data } = await apiClient.get(`/provenance/verify/${intelligenceId}`);
+      return data;
+    },
+    evolution: async (intelligenceId: string) => {
+      const { data } = await apiClient.get(`/provenance/evolution/${intelligenceId}`);
+      return data;
+    },
+    hallucinationCheck: async (intelligenceId: string) => {
+      const { data } = await apiClient.post(`/provenance/hallucination-check/${intelligenceId}`);
+      return data;
+    },
+    chain: async (intelligenceId: string) => {
+      const { data } = await apiClient.get(`/provenance/chain/${intelligenceId}`);
+      return data;
+    },
+  },
+  attribution: {
+    fingerprint: async (entityId: string) => {
+      const { data } = await apiClient.post(`/attribution/fingerprint/${entityId}`);
+      return data;
+    },
+    findSame: async (entityId: string, threshold: number = 0.7) => {
+      const { data } = await apiClient.post(`/attribution/find-same/${entityId}?threshold=${threshold}`);
+      return data;
+    },
+    report: async (entityId: string) => {
+      const { data } = await apiClient.get(`/attribution/report/${entityId}`);
+      return data;
+    },
+  },
+  decay: {
+    getIntelligence: async (intelligenceId: string) => {
+      const { data } = await apiClient.get(`/decay/intelligence/${intelligenceId}`);
+      return data;
+    },
+    getCurve: async (intelligenceId: string) => {
+      const { data } = await apiClient.get(`/decay/curve/${intelligenceId}`);
+      return data;
+    },
+    batch: async () => {
+      const { data } = await apiClient.get('/decay/batch');
+      return data;
+    },
+    recommendations: async () => {
+      const { data } = await apiClient.get('/decay/recommendations');
+      return data;
+    },
+  },
+};
+
 export default apiClient;

@@ -21,6 +21,11 @@ from app.core.pir_engine import PIREngine
 from app.core.rate_limiter import rate_limiter
 from app.core.task_queue import task_queue
 from app.core.vector_store import VectorStore
+from app.core.zero_day_detector import ZeroDayDetector
+from app.core.attack_chain_predictor import AttackChainPredictor
+from app.core.provenance_chain import ProvenanceChain
+from app.core.entity_attribution import EntityAttribution
+from app.core.temporal_decay import TemporalDecay
 from app.db.database import init_db
 
 
@@ -54,12 +59,12 @@ manager = ConnectionManager()
 async def _initialize_services(app: FastAPI):
     logger.info("Initializing core services...")
 
-    logger.info("[1/12] Creating LLMService...")
+    logger.info("[1/17] Creating LLMService...")
     llm = LLMService()
     app.state.llm = llm
     logger.info("LLMService created")
 
-    logger.info("[2/12] Creating VectorStore...")
+    logger.info("[2/17] Creating VectorStore...")
     vector_store = VectorStore(
         persist_dir=settings.CHROMA_PERSIST_DIR,
         llm=llm,
@@ -67,17 +72,17 @@ async def _initialize_services(app: FastAPI):
     app.state.vector_store = vector_store
     logger.info("VectorStore created")
 
-    logger.info("[3/12] Creating KnowledgeGraph...")
+    logger.info("[3/17] Creating KnowledgeGraph...")
     knowledge_graph = KnowledgeGraph(persist_dir="./graph_data")
     app.state.knowledge_graph = knowledge_graph
     logger.info("KnowledgeGraph created")
 
-    logger.info("[4/12] Creating BlackTalkEngine...")
+    logger.info("[4/17] Creating BlackTalkEngine...")
     blacktalk_engine = BlackTalkEngine(llm=llm, vector_store=vector_store)
     app.state.blacktalk_engine = blacktalk_engine
     logger.info(f"BlackTalkEngine created with {len(blacktalk_engine._dictionary)} seed terms")
 
-    logger.info("[5/12] Initializing BlackTalkEngine vectors...")
+    logger.info("[5/17] Initializing BlackTalkEngine vectors...")
     try:
         await asyncio.wait_for(blacktalk_engine.initialize_vectors(), timeout=30.0)
         logger.info("BlackTalkEngine vectors initialized")
@@ -86,17 +91,17 @@ async def _initialize_services(app: FastAPI):
     except Exception as exc:
         logger.warning(f"BlackTalkEngine vector initialization failed: {exc}. Vectors will be built on-demand.")
 
-    logger.info("[6/12] Creating EvidenceChain...")
+    logger.info("[6/17] Creating EvidenceChain...")
     evidence_chain = EvidenceChain(llm=llm, vector_store=vector_store)
     app.state.evidence_chain = evidence_chain
     logger.info("EvidenceChain created")
 
-    logger.info("[7/12] Creating PIREngine...")
+    logger.info("[7/17] Creating PIREngine...")
     pir_engine = PIREngine(llm=llm, vector_store=vector_store)
     app.state.pir_engine = pir_engine
     logger.info("PIREngine created")
 
-    logger.info("[8/12] Creating OrchestratorAgent with all sub-agents...")
+    logger.info("[8/17] Creating OrchestratorAgent with all sub-agents...")
     from app.agents.orchestrator import OrchestratorAgent
 
     orchestrator = OrchestratorAgent(
@@ -110,7 +115,7 @@ async def _initialize_services(app: FastAPI):
     app.state.orchestrator = orchestrator
     logger.info("OrchestratorAgent created with all sub-agents")
 
-    logger.info("[9/12] Creating collectors...")
+    logger.info("[9/17] Creating collectors...")
     from app.collectors.telegram_collector import TelegramCollector
     from app.collectors.forum_collector import ForumCollector
     from app.collectors.wechat_collector import WeChatCollector
@@ -127,20 +132,42 @@ async def _initialize_services(app: FastAPI):
     app.state.darkweb_collector = darkweb_collector
     logger.info("All collectors created")
 
-    logger.info("[10/12] Registering collectors with CollectorAgent...")
+    logger.info("[10/17] Registering collectors with CollectorAgent...")
     orchestrator.collector.register_collector("telegram", telegram_collector.collect)
     orchestrator.collector.register_collector("forum", forum_collector.collect)
     orchestrator.collector.register_collector("wechat", wechat_collector.collect)
     orchestrator.collector.register_collector("darkweb", darkweb_collector.collect)
     logger.info("All collectors registered")
 
-    logger.info("[11/12] Registering task queue handlers and starting workers...")
+    logger.info("[11/17] Registering task queue handlers and starting workers...")
     from app.api.agent import register_agent_handlers
     register_agent_handlers()
     await task_queue.start()
     logger.info(f"Task queue started with {settings.MAX_CONCURRENT_TASKS} workers")
 
-    logger.info("[12/12] Creating default admin user...")
+    logger.info("[12/17] Creating innovation engines...")
+
+    zero_day_detector = ZeroDayDetector(llm=llm, vector_store=vector_store, blacktalk_engine=blacktalk_engine)
+    app.state.zero_day_detector = zero_day_detector
+    logger.info("ZeroDayDetector created")
+
+    attack_chain_predictor = AttackChainPredictor(llm=llm, knowledge_graph=knowledge_graph, vector_store=vector_store)
+    app.state.attack_chain_predictor = attack_chain_predictor
+    logger.info("AttackChainPredictor created")
+
+    provenance_chain = ProvenanceChain(llm=llm, vector_store=vector_store)
+    app.state.provenance_chain = provenance_chain
+    logger.info("ProvenanceChain created")
+
+    entity_attribution = EntityAttribution(llm=llm, knowledge_graph=knowledge_graph, vector_store=vector_store)
+    app.state.entity_attribution = entity_attribution
+    logger.info("EntityAttribution created")
+
+    temporal_decay = TemporalDecay(llm=llm, vector_store=vector_store, knowledge_graph=knowledge_graph)
+    app.state.temporal_decay = temporal_decay
+    logger.info("TemporalDecay created")
+
+    logger.info("[13/17] Creating default admin user...")
     create_default_admin()
     app.state.connection_manager = manager
     logger.info("All services initialized and stored in app.state")
@@ -270,7 +297,9 @@ app.include_router(api_router, prefix="/api/v1")
 async def health_check(request: Request):
     services_status = {}
     for attr in ("llm", "vector_store", "knowledge_graph", "blacktalk_engine",
-                 "evidence_chain", "pir_engine", "orchestrator"):
+                 "evidence_chain", "pir_engine", "orchestrator",
+                 "zero_day_detector", "attack_chain_predictor", "provenance_chain",
+                 "entity_attribution", "temporal_decay"):
         services_status[attr] = hasattr(request.app.state, attr)
 
     task_queue_stats = {

@@ -1,0 +1,100 @@
+import asyncio
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from loguru import logger
+from pydantic import BaseModel, Field
+
+from app.core.auth import User, get_current_user, require_role, Role
+from app.core.temporal_decay import TemporalDecay
+
+router = APIRouter(prefix="/decay", tags=["decay"])
+
+
+def get_temporal_decay(request: Request) -> TemporalDecay:
+    return request.app.state.temporal_decay
+
+
+@router.get("/intelligence/{intelligence_id}")
+async def get_decay_status(
+    intelligence_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    decay = get_temporal_decay(request)
+    try:
+        result = await asyncio.wait_for(
+            decay.compute_current_confidence(intelligence_id),
+            timeout=60,
+        )
+        return result.to_dict()
+    except asyncio.TimeoutError:
+        logger.error(f"Decay status computation timed out for intelligence '{intelligence_id}'")
+        raise HTTPException(status_code=504, detail="Decay status computation timed out")
+    except Exception as exc:
+        logger.error(f"Decay status computation failed for intelligence '{intelligence_id}': {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/curve/{intelligence_id}")
+async def get_decay_curve(
+    intelligence_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    decay = get_temporal_decay(request)
+    try:
+        curve = await asyncio.wait_for(
+            decay.compute_decay_curve(intelligence_id),
+            timeout=60,
+        )
+        return curve.to_dict()
+    except asyncio.TimeoutError:
+        logger.error(f"Decay curve computation timed out for intelligence '{intelligence_id}'")
+        raise HTTPException(status_code=504, detail="Decay curve computation timed out")
+    except Exception as exc:
+        logger.error(f"Decay curve computation failed for intelligence '{intelligence_id}': {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/batch")
+async def batch_decay_analysis(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    decay = get_temporal_decay(request)
+    try:
+        result = await asyncio.wait_for(
+            decay.batch_decay_analysis(),
+            timeout=60,
+        )
+        return result.to_dict()
+    except asyncio.TimeoutError:
+        logger.error("Batch decay analysis timed out")
+        raise HTTPException(status_code=504, detail="Batch decay analysis timed out")
+    except Exception as exc:
+        logger.error(f"Batch decay analysis failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/recommendations")
+async def get_refresh_recommendations(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    decay = get_temporal_decay(request)
+    try:
+        recommendations = await asyncio.wait_for(
+            decay.recommend_refresh(),
+            timeout=60,
+        )
+        return {
+            "recommendations": [r.to_dict() for r in recommendations],
+            "total": len(recommendations),
+        }
+    except asyncio.TimeoutError:
+        logger.error("Refresh recommendations computation timed out")
+        raise HTTPException(status_code=504, detail="Refresh recommendations computation timed out")
+    except Exception as exc:
+        logger.error(f"Refresh recommendations computation failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))

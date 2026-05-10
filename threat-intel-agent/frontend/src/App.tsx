@@ -11,6 +11,7 @@ import BlackTalk from './pages/BlackTalk';
 import Reports from './pages/Reports';
 import Login from './pages/Login';
 import AgentPage from './pages/Agent';
+import Innovation from './pages/Innovation';
 import { tokenStorage } from './utils/tokenStorage';
 
 const getToken = (): string | null => {
@@ -113,6 +114,14 @@ const App: React.FC = () => {
             element={
               <AuthGuard>
                 <AgentPage />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/innovation"
+            element={
+              <AuthGuard>
+                <Innovation />
               </AuthGuard>
             }
           />

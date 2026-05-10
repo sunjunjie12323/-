@@ -11,6 +11,7 @@ import {
   LogoutOutlined,
   UserOutlined,
   SettingOutlined,
+  BulbOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authApi } from '../services/api';
@@ -32,6 +33,7 @@ const ALL_MENU_ITEMS = [
   { key: '/pirs', icon: <FileSearchOutlined />, label: 'PIR管理', roles: ['admin', 'analyst'] },
   { key: '/reports', icon: <FileTextOutlined />, label: '报告中心', roles: ['admin', 'analyst', 'viewer'] },
   { key: '/agent', icon: <RobotOutlined />, label: 'Agent', roles: ['admin', 'analyst'] },
+  { key: '/innovation', icon: <BulbOutlined />, label: '创新分析', roles: ['admin', 'analyst'] },
 ];
 
 const AppLayout: React.FC<LayoutProps> = ({ children }) => {
