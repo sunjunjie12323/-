@@ -26,6 +26,7 @@ import {
   LinkOutlined,
   ForkOutlined,
   FieldTimeOutlined,
+  HeartOutlined,
 } from '@ant-design/icons';
 import { api } from '../services/api';
 
@@ -695,6 +696,448 @@ const DecayTab: React.FC = () => {
   );
 };
 
+const OrganismTab: React.FC = () => {
+  const [organisms, setOrganisms] = useState<any[]>([]);
+  const [genes, setGenes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [spawnVisible, setSpawnVisible] = useState(false);
+  const [spawnId, setSpawnId] = useState('');
+  const [spawnSpecies, setSpawnSpecies] = useState('ip');
+  const [spawnValue, setSpawnValue] = useState('');
+  const [selectedOrg, setSelectedOrg] = useState<any>(null);
+  const [vitality, setVitality] = useState<any>(null);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [genealogy, setGenealogy] = useState<any>(null);
+  const [lifecycleResult, setLifecycleResult] = useState<any>(null);
+  const [accuracy, setAccuracy] = useState<any>(null);
+
+  const fetchOrganisms = async () => {
+    setLoading(true);
+    try {
+      const [orgRes, geneRes] = await Promise.all([
+        api.organism.listOrganisms(undefined, false),
+        api.organism.listGenes(),
+      ]);
+      setOrganisms(orgRes.organisms || []);
+      setGenes(geneRes.genes || []);
+    } catch (err: any) {
+      message.error(err?.message || '获取生命体数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchOrganisms();
+  }, []);
+
+  const handleSpawn = async () => {
+    if (!spawnId.trim() || !spawnValue.trim()) {
+      message.warning('请填写情报ID和值');
+      return;
+    }
+    try {
+      await api.organism.spawn(spawnId, spawnSpecies, {
+        value: spawnValue,
+        threat_type: 'unknown',
+        confidence: 0.7,
+      });
+      message.success('生命体诞生成功！');
+      setSpawnVisible(false);
+      setSpawnId('');
+      setSpawnValue('');
+      fetchOrganisms();
+    } catch (err: any) {
+      message.error(err?.message || '诞生失败');
+    }
+  };
+
+  const handleSelectOrganism = async (org: any) => {
+    setSelectedOrg(org);
+    try {
+      const [vRes, tRes, gRes] = await Promise.all([
+        api.organism.checkVitality(org.intelligence_id),
+        api.organism.getTimeline(org.intelligence_id),
+        api.organism.getGenealogy(org.intelligence_id),
+      ]);
+      setVitality(vRes);
+      setTimeline(tRes.events || []);
+      setGenealogy(gRes);
+    } catch (err: any) {
+      message.error(err?.message || '获取详情失败');
+    }
+  };
+
+  const handleEvolve = async () => {
+    if (!selectedOrg) return;
+    try {
+      const evolved = await api.organism.evolve(
+        selectedOrg.intelligence_id,
+        { confidence: Math.min(1, (selectedOrg.current_state?.confidence || 0.5) + 0.1), confirmed: true },
+        'manual_evidence'
+      );
+      message.success(`进化成功！活力值: ${evolved.vitality?.toFixed(4)}`);
+      handleSelectOrganism(evolved);
+      fetchOrganisms();
+    } catch (err: any) {
+      message.error(err?.message || '进化失败');
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!selectedOrg) return;
+    try {
+      const gene = await api.organism.archiveOrganism(selectedOrg.intelligence_id, 'manual_archive');
+      message.success(`已归档，基因 ${gene.gene_id?.substring(0, 12)}... 已保存`);
+      setSelectedOrg(null);
+      setVitality(null);
+      fetchOrganisms();
+    } catch (err: any) {
+      message.error(err?.message || '归档失败');
+    }
+  };
+
+  const handleLifecycleCheck = async () => {
+    try {
+      const res = await api.organism.runLifecycleCheck();
+      setLifecycleResult(res);
+      message.success('生命周期检查完成');
+      fetchOrganisms();
+    } catch (err: any) {
+      message.error(err?.message || '生命周期检查失败');
+    }
+  };
+
+  const handleFetchAccuracy = async () => {
+    try {
+      const res = await api.organism.getPredictionAccuracy();
+      setAccuracy(res);
+    } catch (err: any) {
+      message.error(err?.message || '获取准确率失败');
+    }
+  };
+
+  const speciesLabels: Record<string, string> = {
+    ip: 'IP地址', phone: '手机号', bankcard: '银行卡', domain: '域名',
+    ttp: '攻击手法', organization: '组织', slang: '黑话', campaign: '攻击活动',
+  };
+
+  const speciesColors: Record<string, string> = {
+    ip: 'blue', phone: 'green', bankcard: 'gold', domain: 'cyan',
+    ttp: 'red', organization: 'purple', slang: 'orange', campaign: 'magenta',
+  };
+
+  const eventColors: Record<string, string> = {
+    born: 'green', mutated: 'blue', died: 'red', reborn: 'gold',
+  };
+
+  const actionLabels: Record<string, string> = {
+    no_action_needed: '无需操作',
+    monitor_normally: '正常监控',
+    schedule_refresh: '计划刷新',
+    urgent_refresh_needed: '急需刷新',
+    archive_and_preserve_genes: '归档保存基因',
+    organism_not_found: '未找到',
+  };
+
+  const orgColumns = [
+    {
+      title: '情报ID',
+      dataIndex: 'intelligence_id',
+      key: 'intelligence_id',
+      ellipsis: true,
+      width: 180,
+      render: (val: string) => (
+        <a onClick={() => handleSelectOrganism(organisms.find(o => o.intelligence_id === val)!)}>
+          {val}
+        </a>
+      ),
+    },
+    {
+      title: '物种',
+      dataIndex: 'species',
+      key: 'species',
+      width: 100,
+      render: (val: string) => <Tag color={speciesColors[val] || 'default'}>{speciesLabels[val] || val}</Tag>,
+    },
+    {
+      title: '活力值',
+      dataIndex: 'vitality',
+      key: 'vitality',
+      width: 120,
+      render: (val: number) => (
+        <Progress
+          percent={Math.round((val || 0) * 100)}
+          size="small"
+          status={(val || 0) < 0.2 ? 'exception' : (val || 0) < 0.5 ? 'active' : 'success'}
+        />
+      ),
+    },
+    {
+      title: '世代',
+      dataIndex: 'generation',
+      key: 'generation',
+      width: 70,
+    },
+    {
+      title: '存活',
+      dataIndex: 'is_alive',
+      key: 'is_alive',
+      width: 70,
+      render: (val: boolean) => <Tag color={val ? 'green' : 'red'}>{val ? '存活' : '死亡'}</Tag>,
+    },
+    {
+      title: '变异次数',
+      dataIndex: 'mutations',
+      key: 'mutations',
+      width: 80,
+      render: (val: any[]) => val?.length || 0,
+    },
+    {
+      title: '年龄(h)',
+      dataIndex: 'current_age_hours',
+      key: 'current_age_hours',
+      width: 90,
+      render: (val: number) => val?.toFixed(2) || '0',
+    },
+  ];
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Row gutter={16}>
+        <Col span={6}>
+          <Card>
+            <Statistic title="存活生命体" value={organisms.filter(o => o.is_alive).length} valueStyle={{ color: '#52c41a' }} prefix={<HeartOutlined />} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="已死亡" value={organisms.filter(o => !o.is_alive).length} valueStyle={{ color: '#ff4d4f' }} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="保存基因" value={genes.length} valueStyle={{ color: '#722ed1' }} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="总生命体" value={organisms.length} valueStyle={{ color: '#1890ff' }} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Card
+        title="情报生命体列表"
+        extra={
+          <Space>
+            <Button type="primary" onClick={() => setSpawnVisible(true)}>诞生新生命体</Button>
+            <Button onClick={handleLifecycleCheck}>生命周期检查</Button>
+            <Button onClick={fetchOrganisms} loading={loading}>刷新</Button>
+          </Space>
+        }
+      >
+        <Table
+          dataSource={organisms}
+          columns={orgColumns}
+          rowKey="intelligence_id"
+          pagination={{ pageSize: 10 }}
+          size="small"
+          loading={loading}
+          onRow={(record) => ({ onClick: () => handleSelectOrganism(record), style: { cursor: 'pointer' } })}
+        />
+      </Card>
+
+      {spawnVisible && (
+        <Card title="诞生新情报生命体">
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Row gutter={16}>
+              <Col span={8}>
+                <Text>情报ID</Text>
+                <Input value={spawnId} onChange={(e) => setSpawnId(e.target.value)} placeholder="如: org-ip-1.2.3.4" />
+              </Col>
+              <Col span={8}>
+                <Text>物种</Text>
+                <select
+                  value={spawnSpecies}
+                  onChange={(e) => setSpawnSpecies(e.target.value)}
+                  style={{ width: '100%', height: 32, padding: '4px 11px', borderRadius: 6, border: '1px solid #d9d9d9' }}
+                >
+                  {Object.entries(speciesLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label} ({key})</option>
+                  ))}
+                </select>
+              </Col>
+              <Col span={8}>
+                <Text>值</Text>
+                <Input value={spawnValue} onChange={(e) => setSpawnValue(e.target.value)} placeholder="如: 192.168.1.1" />
+              </Col>
+            </Row>
+            <Space>
+              <Button type="primary" onClick={handleSpawn}>诞生</Button>
+              <Button onClick={() => setSpawnVisible(false)}>取消</Button>
+            </Space>
+          </Space>
+        </Card>
+      )}
+
+      {selectedOrg && (
+        <Row gutter={16}>
+          <Col span={12}>
+            <Card
+              title={`生命体: ${selectedOrg.intelligence_id}`}
+              extra={
+                <Space>
+                  <Button type="primary" size="small" onClick={handleEvolve}>进化</Button>
+                  {selectedOrg.is_alive && (
+                    <Button danger size="small" onClick={handleArchive}>归档</Button>
+                  )}
+                </Space>
+              }
+            >
+              {vitality && (
+                <Descriptions column={2} size="small">
+                  <Descriptions.Item label="活力值">
+                    <Progress
+                      percent={Math.round((vitality.vitality || 0) * 100)}
+                      status={(vitality.vitality || 0) < 0.2 ? 'exception' : 'success'}
+                    />
+                  </Descriptions.Item>
+                  <Descriptions.Item label="状态">
+                    <Tag color={vitality.is_alive ? 'green' : 'red'}>{vitality.is_alive ? '存活' : '死亡'}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="新鲜度">
+                    <Progress percent={Math.round((vitality.freshness || 0) * 100)} size="small" />
+                  </Descriptions.Item>
+                  <Descriptions.Item label="活跃度">
+                    <Progress percent={Math.round((vitality.activity || 0) * 100)} size="small" />
+                  </Descriptions.Item>
+                  <Descriptions.Item label="相关度">
+                    <Progress percent={Math.round((vitality.relevance || 0) * 100)} size="small" />
+                  </Descriptions.Item>
+                  <Descriptions.Item label="建议操作">
+                    <Tag color={vitality.recommended_action === 'no_action_needed' ? 'green' : vitality.recommended_action === 'archive_and_preserve_genes' ? 'red' : 'orange'}>
+                      {actionLabels[vitality.recommended_action] || vitality.recommended_action}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="世代">{vitality.generation}</Descriptions.Item>
+                  <Descriptions.Item label="半衰期">{vitality.half_life_hours}h</Descriptions.Item>
+                </Descriptions>
+              )}
+            </Card>
+          </Col>
+          <Col span={12}>
+            <Card title="进化时间线">
+              <Timeline
+                items={timeline.map((ev: any, idx: number) => ({
+                  color: eventColors[ev.event_type] || 'blue',
+                  children: (
+                    <Space direction="vertical" size={0}>
+                      <Space>
+                        <Tag color={eventColors[ev.event_type]}>{ev.event_type}</Tag>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{ev.timestamp?.substring(11, 19)}</Text>
+                      </Space>
+                      <Text>{ev.description}</Text>
+                      {ev.trigger && <Text type="secondary" style={{ fontSize: 12 }}>触发: {ev.trigger}</Text>}
+                    </Space>
+                  ),
+                }))}
+              />
+              {timeline.length === 0 && <Empty description="暂无进化记录" />}
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {selectedOrg && genealogy && (
+        <Card title="基因族谱">
+          <Descriptions column={3} size="small">
+            <Descriptions.Item label="当前世代">{genealogy.current_generation}</Descriptions.Item>
+            <Descriptions.Item label="祖先数量">{genealogy.total_ancestors}</Descriptions.Item>
+            <Descriptions.Item label="继承模式">
+              <Space wrap>
+                {(genealogy.inherited_patterns || []).map((p: string, idx: number) => (
+                  <Tag key={idx} color="purple">{p}</Tag>
+                ))}
+                {(genealogy.inherited_patterns || []).length === 0 && <Text type="secondary">无</Text>}
+              </Space>
+            </Descriptions.Item>
+          </Descriptions>
+          {(genealogy.ancestors || []).length > 0 && (
+            <Table
+              dataSource={genealogy.ancestors}
+              columns={[
+                { title: '祖先ID', dataIndex: 'id', key: 'id', ellipsis: true },
+                { title: '世代', dataIndex: 'generation', key: 'generation', width: 70 },
+                { title: '物种', dataIndex: 'species', key: 'species', width: 100, render: (v: string) => <Tag color={speciesColors[v]}>{speciesLabels[v] || v}</Tag> },
+                { title: '关键变异', dataIndex: 'key_pattern', key: 'key_pattern', ellipsis: true },
+                { title: '死亡时间', dataIndex: 'died_at', key: 'died_at', width: 180, render: (v: string) => v || '-' },
+              ]}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              style={{ marginTop: 12 }}
+            />
+          )}
+        </Card>
+      )}
+
+      {lifecycleResult && (
+        <Card title="生命周期检查结果">
+          <Row gutter={16}>
+            <Col span={4}><Statistic title="检查数" value={lifecycleResult.checked} /></Col>
+            <Col span={4}><Statistic title="变异数" value={lifecycleResult.mutated} valueStyle={{ color: '#1890ff' }} /></Col>
+            <Col span={4}><Statistic title="死亡数" value={lifecycleResult.died} valueStyle={{ color: '#ff4d4f' }} /></Col>
+            <Col span={4}><Statistic title="重生数" value={lifecycleResult.reborn} valueStyle={{ color: '#52c41a' }} /></Col>
+            <Col span={4}><Statistic title="预测验证" value={lifecycleResult.predictions_validated} valueStyle={{ color: '#722ed1' }} /></Col>
+          </Row>
+        </Card>
+      )}
+
+      <Card title="预测自验证闭环" extra={<Button size="small" onClick={handleFetchAccuracy}>获取准确率</Button>}>
+        {accuracy ? (
+          <Descriptions column={3} size="small">
+            <Descriptions.Item label="总预测数">{accuracy.total_predictions}</Descriptions.Item>
+            <Descriptions.Item label="正确预测">{accuracy.correct_predictions}</Descriptions.Item>
+            <Descriptions.Item label="准确率">
+              <Progress percent={Math.round((accuracy.accuracy || 0) * 100)} size="small" />
+            </Descriptions.Item>
+            <Descriptions.Item label="Brier分数">{accuracy.brier_score?.toFixed(4) || '-'}</Descriptions.Item>
+            <Descriptions.Item label="校准数据" span={2}>
+              <Space wrap>
+                {Object.entries(accuracy.calibration_data || {}).map(([bucket, info]: [string, any]) => (
+                  <Tag key={bucket}>{bucket}: 实际{(info.actual_rate * 100).toFixed(0)}% (样本{info.sample_size})</Tag>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          </Descriptions>
+        ) : (
+          <Empty description="暂无预测验证数据，请先注册预测并验证" />
+        )}
+      </Card>
+
+      {genes.length > 0 && (
+        <Card title="基因库">
+          <Table
+            dataSource={genes}
+            columns={[
+              { title: '基因ID', dataIndex: 'gene_id', key: 'gene_id', ellipsis: true, width: 200 },
+              { title: '物种', dataIndex: 'species', key: 'species', width: 100, render: (v: string) => <Tag color={speciesColors[v]}>{speciesLabels[v] || v}</Tag> },
+              { title: '模式', dataIndex: 'patterns', key: 'patterns', render: (v: string[]) => <Space wrap>{(v || []).map((p, i) => <Tag key={i} color="purple">{p}</Tag>)}</Space> },
+              { title: '关联', dataIndex: 'associations', key: 'associations', render: (v: string[]) => <Text>{(v || []).length} 个</Text> },
+              { title: '寿命(h)', dataIndex: 'total_lifetime_hours', key: 'total_lifetime_hours', width: 90, render: (v: number) => v?.toFixed(1) || '0' },
+              { title: '死因', dataIndex: 'cause_of_death', key: 'cause_of_death', width: 100 },
+            ]}
+            rowKey="gene_id"
+            pagination={{ pageSize: 5 }}
+            size="small"
+          />
+        </Card>
+      )}
+    </Space>
+  );
+};
+
 const Innovation: React.FC = () => {
   const tabItems = [
     {
@@ -746,6 +1189,16 @@ const Innovation: React.FC = () => {
         </span>
       ),
       children: <DecayTab />,
+    },
+    {
+      key: 'organism',
+      label: (
+        <span>
+          <HeartOutlined />
+          情报生命体
+        </span>
+      ),
+      children: <OrganismTab />,
     },
   ];
 

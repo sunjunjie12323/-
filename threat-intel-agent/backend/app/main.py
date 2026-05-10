@@ -26,6 +26,7 @@ from app.core.attack_chain_predictor import AttackChainPredictor
 from app.core.provenance_chain import ProvenanceChain
 from app.core.entity_attribution import EntityAttribution
 from app.core.temporal_decay import TemporalDecay
+from app.core.intelligence_organism import IntelligenceOrganismEngine
 from app.db.database import init_db
 
 
@@ -167,6 +168,10 @@ async def _initialize_services(app: FastAPI):
     app.state.temporal_decay = temporal_decay
     logger.info("TemporalDecay created")
 
+    intelligence_organism = IntelligenceOrganismEngine(llm=llm, vector_store=vector_store, knowledge_graph=knowledge_graph)
+    app.state.intelligence_organism = intelligence_organism
+    logger.info("IntelligenceOrganismEngine created")
+
     logger.info("[13/17] Creating default admin user...")
     create_default_admin()
     app.state.connection_manager = manager
@@ -299,7 +304,7 @@ async def health_check(request: Request):
     for attr in ("llm", "vector_store", "knowledge_graph", "blacktalk_engine",
                  "evidence_chain", "pir_engine", "orchestrator",
                  "zero_day_detector", "attack_chain_predictor", "provenance_chain",
-                 "entity_attribution", "temporal_decay"):
+                 "entity_attribution", "temporal_decay", "intelligence_organism"):
         services_status[attr] = hasattr(request.app.state, attr)
 
     task_queue_stats = {

@@ -511,6 +511,93 @@ export const api = {
       return data;
     },
   },
+  organism: {
+    spawn: async (intelligenceId: string, species: string, initialData: Record<string, unknown> = {}) => {
+      const { data } = await apiClient.post('/organism/spawn', {
+        intelligence_id: intelligenceId,
+        species,
+        initial_data: initialData,
+      });
+      return data;
+    },
+    evolve: async (organismId: string, newData: Record<string, unknown> = {}, trigger: string = 'manual') => {
+      const { data } = await apiClient.post('/organism/evolve', {
+        organism_id: organismId,
+        new_data: newData,
+        trigger,
+      });
+      return data;
+    },
+    checkVitality: async (organismId: string) => {
+      const { data } = await apiClient.get(`/organism/vitality/${encodeURIComponent(organismId)}`);
+      return data;
+    },
+    getTimeline: async (organismId: string) => {
+      const { data } = await apiClient.get(`/organism/timeline/${encodeURIComponent(organismId)}`);
+      return data;
+    },
+    getOffspring: async (organismId: string, depth: number = 3) => {
+      const { data } = await apiClient.get(`/organism/offspring/${encodeURIComponent(organismId)}?depth=${depth}`);
+      return data;
+    },
+    registerPrediction: async (entityId: string, predictedSteps: Record<string, unknown>[], validationWindowHours: number = 168) => {
+      const { data } = await apiClient.post('/organism/prediction/register', {
+        entity_id: entityId,
+        predicted_steps: predictedSteps,
+        validation_window_hours: validationWindowHours,
+      });
+      return data;
+    },
+    validatePredictions: async () => {
+      const { data } = await apiClient.post('/organism/prediction/validate');
+      return data;
+    },
+    getPredictionAccuracy: async (entityId?: string) => {
+      const { data } = await apiClient.get('/organism/prediction/accuracy', {
+        params: entityId ? { entity_id: entityId } : {},
+      });
+      return data;
+    },
+    calibrateModel: async () => {
+      const { data } = await apiClient.post('/organism/prediction/calibrate');
+      return data;
+    },
+    archiveOrganism: async (organismId: string, cause: string = 'expired') => {
+      const { data } = await apiClient.post(`/organism/gene/archive/${encodeURIComponent(organismId)}?cause=${cause}`);
+      return data;
+    },
+    findGeneMatches: async (newIntelligenceData: Record<string, unknown>) => {
+      const { data } = await apiClient.post('/organism/gene/match', {
+        new_intelligence_data: newIntelligenceData,
+      });
+      return data;
+    },
+    inheritGenes: async (newOrganismId: string, parentGeneIds: string[]) => {
+      const { data } = await apiClient.post('/organism/gene/inherit', {
+        new_organism_id: newOrganismId,
+        parent_gene_ids: parentGeneIds,
+      });
+      return data;
+    },
+    getGenealogy: async (organismId: string) => {
+      const { data } = await apiClient.get(`/organism/genealogy/${encodeURIComponent(organismId)}`);
+      return data;
+    },
+    runLifecycleCheck: async () => {
+      const { data } = await apiClient.post('/organism/lifecycle-check');
+      return data;
+    },
+    listOrganisms: async (species?: string, aliveOnly: boolean = true) => {
+      const { data } = await apiClient.get('/organism/organisms', {
+        params: { species, alive_only: aliveOnly },
+      });
+      return data;
+    },
+    listGenes: async () => {
+      const { data } = await apiClient.get('/organism/genes');
+      return data;
+    },
+  },
 };
 
 export default apiClient;
