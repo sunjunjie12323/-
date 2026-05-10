@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     ALIENVAULT_OTX_KEY: str = ""
     VIRUSTOTAL_API_KEY: str = ""
     ABUSEIPDB_API_KEY: str = ""
+    THREATBOOK_API_KEY: str = ""
+    QIANXIN_API_KEY: str = ""
 
     @property
     def secret_key_resolved(self) -> str:

@@ -1,14 +1,14 @@
-import json
-from collections import deque
+import os
+import pickle
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, List, Optional
-from uuid import uuid4
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 from loguru import logger
 
 from app.core.knowledge_graph import KnowledgeGraph
-from app.core.llm import LLMService
 from app.core.vector_store import VectorStore
 
 
@@ -16,6 +16,8 @@ from app.core.vector_store import VectorStore
 class PredictedStep:
     step: int
     action: str
+    technique_id: str
+    technique_name: str
     probability: float
     reasoning: str
     related_entities: List[str] = field(default_factory=list)
@@ -26,6 +28,8 @@ class PredictedStep:
         return {
             "step": self.step,
             "action": self.action,
+            "technique_id": self.technique_id,
+            "technique_name": self.technique_name,
             "probability": self.probability,
             "reasoning": self.reasoning,
             "related_entities": self.related_entities,
@@ -86,15 +90,200 @@ class EarlyWarning:
         }
 
 
+MITRE_TECHNIQUES = {
+    "T1595": {"name": "主动扫描", "tactic": "reconnaissance", "risk": "low"},
+    "T1592": {"name": "收集受害者主机信息", "tactic": "reconnaissance", "risk": "low"},
+    "T1589": {"name": "收集受害者身份信息", "tactic": "reconnaissance", "risk": "medium"},
+    "T1566": {"name": "钓鱼攻击", "tactic": "initial_access", "risk": "high"},
+    "T1190": {"name": "利用公开应用漏洞", "tactic": "initial_access", "risk": "critical"},
+    "T1078": {"name": "有效账号", "tactic": "initial_access", "risk": "high"},
+    "T1059": {"name": "命令行脚本执行", "tactic": "execution", "risk": "high"},
+    "T1204": {"name": "用户执行", "tactic": "execution", "risk": "medium"},
+    "T1053": {"name": "计划任务", "tactic": "execution", "risk": "medium"},
+    "T1055": {"name": "进程注入", "tactic": "defense_evasion", "risk": "high"},
+    "T1070": {"name": "痕迹清除", "tactic": "defense_evasion", "risk": "high"},
+    "T1562": {"name": "削弱防御", "tactic": "defense_evasion", "risk": "critical"},
+    "T1027": {"name": "混淆文件或信息", "tactic": "defense_evasion", "risk": "medium"},
+    "T1082": {"name": "系统信息发现", "tactic": "discovery", "risk": "low"},
+    "T1083": {"name": "文件和目录发现", "tactic": "discovery", "risk": "low"},
+    "T1046": {"name": "网络服务发现", "tactic": "discovery", "risk": "medium"},
+    "T1005": {"name": "本地数据收集", "tactic": "collection", "risk": "medium"},
+    "T1039": {"name": "共享驱动器数据收集", "tactic": "collection", "risk": "medium"},
+    "T1041": {"name": "通过C2通道渗出数据", "tactic": "exfiltration", "risk": "high"},
+    "T1048": {"name": "通过替代协议渗出", "tactic": "exfiltration", "risk": "high"},
+    "T1071": {"name": "应用层协议通信", "tactic": "command_and_control", "risk": "high"},
+    "T1573": {"name": "加密通道", "tactic": "command_and_control", "risk": "medium"},
+    "T1095": {"name": "非应用层协议通信", "tactic": "command_and_control", "risk": "medium"},
+    "T1486": {"name": "数据加密勒索", "tactic": "impact", "risk": "critical"},
+    "T1489": {"name": "服务停止", "tactic": "impact", "risk": "critical"},
+    "T1490": {"name": " inhibit system recovery", "tactic": "impact", "risk": "critical"},
+    "T1111": {"name": "认证钓鱼", "tactic": "credential_access", "risk": "high"},
+    "T1558": {"name": "Kerberoasting", "tactic": "credential_access", "risk": "high"},
+    "T1003": {"name": "操作系统凭证转储", "tactic": "credential_access", "risk": "critical"},
+    "T1548": {"name": "权限提升滥用", "tactic": "privilege_escalation", "risk": "high"},
+    "T1068": {"name": "漏洞利用提权", "tactic": "privilege_escalation", "risk": "critical"},
+    "T1547": {"name": "启动项劫持", "tactic": "persistence", "risk": "high"},
+    "T1133": {"name": "外部远程服务", "tactic": "persistence", "risk": "medium"},
+    "T1050": {"name": "新建服务", "tactic": "persistence", "risk": "medium"},
+    "T1098": {"name": "账号操作", "tactic": "persistence", "risk": "medium"},
+    "T1070.004": {"name": "文件删除", "tactic": "defense_evasion", "risk": "medium"},
+    "T1071.001": {"name": "Web协议通信", "tactic": "command_and_control", "risk": "high"},
+    "T1566.001": {"name": "钓鱼附件", "tactic": "initial_access", "risk": "high"},
+    "T1566.002": {"name": "钓鱼链接", "tactic": "initial_access", "risk": "high"},
+    "T1059.001": {"name": "PowerShell执行", "tactic": "execution", "risk": "high"},
+    "T1059.003": {"name": "Windows命令行", "tactic": "execution", "risk": "medium"},
+}
+
+MITRE_TRANSITIONS = {
+    "reconnaissance": {"initial_access": 0.7, "reconnaissance": 0.3},
+    "initial_access": {"execution": 0.5, "persistence": 0.2, "credential_access": 0.15, "defense_evasion": 0.15},
+    "execution": {"persistence": 0.25, "privilege_escalation": 0.25, "defense_evasion": 0.2, "discovery": 0.15, "credential_access": 0.15},
+    "persistence": {"privilege_escalation": 0.3, "defense_evasion": 0.25, "discovery": 0.2, "credential_access": 0.15, "execution": 0.1},
+    "privilege_escalation": {"credential_access": 0.3, "discovery": 0.25, "collection": 0.2, "defense_evasion": 0.15, "persistence": 0.1},
+    "defense_evasion": {"credential_access": 0.2, "discovery": 0.2, "persistence": 0.2, "execution": 0.2, "privilege_escalation": 0.2},
+    "credential_access": {"discovery": 0.3, "collection": 0.25, "lateral_movement": 0.2, "persistence": 0.15, "privilege_escalation": 0.1},
+    "discovery": {"collection": 0.3, "lateral_movement": 0.25, "credential_access": 0.2, "command_and_control": 0.15, "execution": 0.1},
+    "lateral_movement": {"collection": 0.3, "credential_access": 0.25, "discovery": 0.2, "command_and_control": 0.15, "persistence": 0.1},
+    "collection": {"command_and_control": 0.35, "exfiltration": 0.3, "collection": 0.15, "lateral_movement": 0.1, "impact": 0.1},
+    "command_and_control": {"exfiltration": 0.4, "impact": 0.25, "collection": 0.15, "lateral_movement": 0.1, "defense_evasion": 0.1},
+    "exfiltration": {"impact": 0.3, "command_and_control": 0.2, "defense_evasion": 0.2, "exfiltration": 0.15, "collection": 0.15},
+    "impact": {"defense_evasion": 0.3, "exfiltration": 0.2, "impact": 0.2, "command_and_control": 0.15, "persistence": 0.15},
+}
+
+ENTITY_TYPE_TO_TACTIC = {
+    "malware": "execution",
+    "threat_actor": "initial_access",
+    "vulnerability": "initial_access",
+    "attack_pattern": "execution",
+    "tool": "execution",
+    "ip_address": "command_and_control",
+    "domain": "command_and_control",
+    "url": "initial_access",
+    "hash": "execution",
+    "email": "initial_access",
+    "phone": "initial_access",
+    "organization": "reconnaissance",
+    "person": "credential_access",
+    "location": "reconnaissance",
+    "financial_account": "credential_access",
+    "website": "initial_access",
+    "service": "discovery",
+}
+
+
 class AttackChainPredictor:
     MAX_BFS_DEPTH = 4
     MAX_NEIGHBORS = 20
     PATTERN_MIN_LENGTH = 2
+    SMOOTHING_ALPHA = 1.0
 
-    def __init__(self, llm: LLMService, vector_store: VectorStore, knowledge_graph: KnowledgeGraph):
-        self.llm = llm
+    def __init__(self, vector_store: VectorStore, knowledge_graph: KnowledgeGraph):
         self.vector_store = vector_store
         self.knowledge_graph = knowledge_graph
+        self._transition_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self._technique_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self._total_transitions = 0
+        self._persist_dir = "./model_data/attack_chain"
+        os.makedirs(self._persist_dir, exist_ok=True)
+        self._load_model()
+
+    def _load_model(self):
+        model_path = os.path.join(self._persist_dir, "markov_chain.pkl")
+        if os.path.exists(model_path):
+            try:
+                with open(model_path, "rb") as f:
+                    data = pickle.load(f)
+                self._transition_counts = defaultdict(lambda: defaultdict(int), data.get("transition_counts", {}))
+                self._technique_counts = defaultdict(lambda: defaultdict(int), data.get("technique_counts", {}))
+                self._total_transitions = data.get("total_transitions", 0)
+                logger.info(f"Markov chain loaded: {self._total_transitions} transitions")
+            except Exception as exc:
+                logger.warning(f"Failed to load Markov chain: {exc}")
+
+    def _save_model(self):
+        model_path = os.path.join(self._persist_dir, "markov_chain.pkl")
+        data = {
+            "transition_counts": dict(self._transition_counts),
+            "technique_counts": dict(self._technique_counts),
+            "total_transitions": self._total_transitions,
+        }
+        with open(model_path, "wb") as f:
+            pickle.dump(data, f)
+        logger.info(f"Markov chain saved: {self._total_transitions} transitions")
+
+    def train_from_graph(self):
+        transitions_learned = 0
+        if not self.knowledge_graph.graph or self.knowledge_graph.graph.number_of_nodes() == 0:
+            logger.warning("Knowledge graph empty, using MITRE ATT&CK prior transitions")
+            self._load_mitre_priors()
+            return
+
+        for source in self.knowledge_graph.graph.nodes():
+            source_entity = self.knowledge_graph.graph.nodes[source]
+            source_type = source_entity.get("entity_type", "unknown")
+            source_tactic = ENTITY_TYPE_TO_TACTIC.get(source_type, "unknown")
+
+            for _, target, data in self.knowledge_graph.graph.out_edges(source, data=True):
+                target_entity = self.knowledge_graph.graph.nodes[target]
+                target_type = target_entity.get("entity_type", "unknown")
+                target_tactic = ENTITY_TYPE_TO_TACTIC.get(target_type, "unknown")
+
+                if source_tactic != "unknown" and target_tactic != "unknown":
+                    self._transition_counts[source_tactic][target_tactic] += 1
+                    self._total_transitions += 1
+                    transitions_learned += 1
+
+                    relation_type = data.get("relation_type", "unknown")
+                    matching_techniques = [
+                        tid for tid, tinfo in MITRE_TECHNIQUES.items()
+                        if tinfo["tactic"] == target_tactic
+                    ]
+                    if matching_techniques:
+                        self._technique_counts[target_tactic][relation_type] = len(matching_techniques)
+
+        logger.info(f"Learned {transitions_learned} transitions from knowledge graph")
+        if self._total_transitions < 10:
+            self._load_mitre_priors()
+        self._save_model()
+
+    def _load_mitre_priors(self):
+        for src_tactic, transitions in MITRE_TRANSITIONS.items():
+            for dst_tactic, prob in transitions.items():
+                count = int(prob * 100)
+                self._transition_counts[src_tactic][dst_tactic] += count
+                self._total_transitions += count
+        logger.info(f"Loaded MITRE ATT&CK prior transitions: {self._total_transitions} total")
+        self._save_model()
+
+    def _get_transition_prob(self, from_tactic: str, to_tactic: str) -> float:
+        from_counts = self._transition_counts.get(from_tactic, {})
+        total = sum(from_counts.values())
+        if total == 0:
+            prior = MITRE_TRANSITIONS.get(from_tactic, {}).get(to_tactic, 0.01)
+            return prior
+        count = from_counts.get(to_tactic, 0)
+        smoothed = (count + self.SMOOTHING_ALPHA) / (total + self.SMOOTHING_ALPHA * len(MITRE_TRANSITIONS))
+        return smoothed
+
+    def _predict_next_tactics(self, current_tactic: str, top_k: int = 3) -> List[Tuple[str, float]]:
+        candidates = []
+        for tactic in MITRE_TRANSITIONS.get(current_tactic, {}):
+            prob = self._get_transition_prob(current_tactic, tactic)
+            candidates.append((tactic, prob))
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[:top_k]
+
+    def _get_techniques_for_tactic(self, tactic: str) -> List[Tuple[str, dict]]:
+        return [
+            (tid, tinfo) for tid, tinfo in MITRE_TECHNIQUES.items()
+            if tinfo["tactic"] == tactic
+        ]
+
+    def _map_entity_to_tactic(self, entity_id: str) -> str:
+        if entity_id in self.knowledge_graph.graph.nodes:
+            entity_type = self.knowledge_graph.graph.nodes[entity_id].get("entity_type", "unknown")
+            return ENTITY_TYPE_TO_TACTIC.get(entity_type, "reconnaissance")
+        return "reconnaissance"
 
     async def predict_next_steps(self, entity_id: str, depth: int = 3) -> PredictionResult:
         entity = await self.knowledge_graph.get_entity(entity_id)
@@ -102,57 +291,80 @@ class AttackChainPredictor:
             return PredictionResult(entity_id=entity_id, entity_name="unknown")
 
         entity_name = entity.value
-        context = await self._gather_entity_context(entity_id, depth)
+        current_tactic = self._map_entity_to_tactic(entity_id)
+        next_tactics = self._predict_next_tactics(current_tactic, top_k=depth)
+
         patterns = await self._find_attack_patterns(entity_id, depth)
         pattern_count = len(patterns)
 
-        try:
-            predictions = await self._llm_predict(entity_name, context, patterns)
-        except Exception as exc:
-            logger.error(f"LLM prediction failed for entity '{entity_id}': {exc}")
-            predictions = self._heuristic_predictions(entity_id, patterns)
+        predictions: List[PredictedStep] = []
+        for step_idx, (tactic, tactic_prob) in enumerate(next_tactics):
+            techniques = self._get_techniques_for_tactic(tactic)
+            if not techniques:
+                continue
 
-        validated_predictions = await self._cross_validate_predictions(predictions, entity_id)
+            technique_prob = tactic_prob / max(len(techniques), 1)
+            top_techniques = sorted(techniques, key=lambda x: {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(x[1]["risk"], 4))[:3]
+
+            for tid, tinfo in top_techniques:
+                combined_prob = tactic_prob * (1.0 / len(top_techniques))
+                combined_prob = min(combined_prob, 1.0)
+
+                for pattern in patterns:
+                    if len(pattern) >= 2 and pattern[0] == entity_id:
+                        for nid in pattern[1:]:
+                            n_entity = await self.knowledge_graph.get_entity(nid)
+                            if n_entity:
+                                n_tactic = ENTITY_TYPE_TO_TACTIC.get(n_entity.type.value if hasattr(n_entity.type, 'value') else str(n_entity.type), "")
+                                if n_tactic == tactic:
+                                    combined_prob = min(combined_prob * 1.3, 1.0)
+
+                risk = tinfo.get("risk", "medium")
+                predictions.append(PredictedStep(
+                    step=len(predictions) + 1,
+                    action=f"可能执行{tinfo['name']}({tid})",
+                    technique_id=tid,
+                    technique_name=tinfo["name"],
+                    probability=round(combined_prob, 3),
+                    reasoning=f"基于MITRE ATT&CK马尔可夫链: {current_tactic}→{tactic}(P={tactic_prob:.3f}), 技术{tid}属于{tactic}阶段",
+                    related_entities=[entity_id],
+                    time_window=self._estimate_time_window(tactic),
+                    risk_level=risk,
+                ))
+
+        predictions.sort(key=lambda p: p.probability, reverse=True)
 
         overall_confidence = 0.0
-        if validated_predictions:
-            overall_confidence = sum(p.probability for p in validated_predictions) / len(validated_predictions)
+        if predictions:
+            overall_confidence = sum(p.probability for p in predictions) / len(predictions)
             if pattern_count > 0:
                 overall_confidence = min(overall_confidence * (1 + 0.1 * min(pattern_count, 5)), 1.0)
 
         return PredictionResult(
             entity_id=entity_id,
             entity_name=entity_name,
-            predictions=validated_predictions,
+            predictions=predictions,
             confidence=overall_confidence,
             based_on_patterns=pattern_count,
         )
 
-    async def _gather_entity_context(self, entity_id: str, depth: int) -> str:
-        subgraph = await self.knowledge_graph.get_subgraph([entity_id], depth=min(depth, 2))
-        entities = subgraph.get("entities", [])
-        relations = subgraph.get("relations", [])
-
-        context_parts = []
-        for e in entities:
-            etype = e.get("type", "unknown")
-            evalue = e.get("value", "")
-            econf = e.get("confidence", 0.0)
-            context_parts.append(f"实体[{etype}]: {evalue} (置信度:{econf:.2f})")
-
-        for r in relations:
-            rtype = r.get("type", "unknown")
-            source = r.get("source_entity_id", "")[:8]
-            target = r.get("target_entity_id", "")[:8]
-            context_parts.append(f"关系: {source} -[{rtype}]-> {target}")
-
-        intel_results = await self.vector_store.search_intelligence(entity_id, n_results=5)
-        for result in intel_results[:3]:
-            doc = result.get("document", "")
-            if doc:
-                context_parts.append(f"相关情报: {doc[:200]}")
-
-        return "\n".join(context_parts)
+    def _estimate_time_window(self, tactic: str) -> str:
+        windows = {
+            "reconnaissance": "1-30天",
+            "initial_access": "1-7天",
+            "execution": "数小时内",
+            "persistence": "1-3天",
+            "privilege_escalation": "数小时内",
+            "defense_evasion": "数小时内",
+            "credential_access": "1-3天",
+            "discovery": "1-7天",
+            "lateral_movement": "1-14天",
+            "collection": "1-7天",
+            "command_and_control": "持续",
+            "exfiltration": "1-3天",
+            "impact": "数小时内",
+        }
+        return windows.get(tactic, "未知")
 
     async def _find_attack_patterns(self, entity_id: str, depth: int) -> List[List[str]]:
         if entity_id not in self.knowledge_graph.graph:
@@ -179,144 +391,36 @@ class AttackChainPredictor:
 
         return patterns
 
-    async def _llm_predict(
-        self, entity_name: str, context: str, patterns: List[List[str]]
-    ) -> List[PredictedStep]:
-        patterns_text = ""
-        if patterns:
-            pattern_strs = []
-            for i, p in enumerate(patterns[:5]):
-                entities_in_path = []
-                for eid in p:
-                    entity = await self.knowledge_graph.get_entity(eid)
-                    entities_in_path.append(entity.value if entity else eid[:8])
-                pattern_strs.append(f"模式{i+1}: {' -> '.join(entities_in_path)}")
-            patterns_text = "\n".join(pattern_strs)
-
-        system_prompt = (
-            "你是一个网络威胁攻击链预测专家。基于已知攻击实体和上下文，预测接下来最可能发生的攻击步骤。\n"
-            "输出JSON格式数组：\n"
-            '[{"step":1,"action":"具体行动描述","probability":0.85,"reasoning":"推理依据",'
-            '"related_entities":["相关实体"],"time_window":"7天内",'
-            '"risk_level":"critical/high/medium/low"}]\n'
-            "probability范围0-1。考虑攻击者的动机、能力、已有资源。\n"
-            "预测3-5个步骤，按概率从高到低排列。\n"
-            "只返回JSON数组，不要其他内容。"
-        )
-        prompt_parts = [
-            f"攻击实体：{entity_name}",
-            f"\n当前上下文：\n{context}",
-        ]
-        if patterns_text:
-            prompt_parts.append(f"\n已知攻击模式：\n{patterns_text}")
-
-        prompt = "\n".join(prompt_parts)
-
-        result = await self.llm.generate_json(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=0.3,
-        )
-
-        predictions: List[PredictedStep] = []
-        items = result if isinstance(result, list) else result.get("predictions", result.get("steps", []))
-        if isinstance(items, list):
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                predictions.append(PredictedStep(
-                    step=int(item.get("step", len(predictions) + 1)),
-                    action=item.get("action", ""),
-                    probability=float(item.get("probability", 0.5)),
-                    reasoning=item.get("reasoning", ""),
-                    related_entities=item.get("related_entities", []),
-                    time_window=item.get("time_window", "未知"),
-                    risk_level=item.get("risk_level", "medium"),
-                ))
-
-        predictions.sort(key=lambda p: p.probability, reverse=True)
-        return predictions
-
-    def _heuristic_predictions(self, entity_id: str, patterns: List[List[str]]) -> List[PredictedStep]:
-        predictions: List[PredictedStep] = []
-        if not patterns:
-            return predictions
-
-        next_entities: Dict[str, int] = {}
-        for pattern in patterns:
-            if len(pattern) >= 2 and pattern[0] == entity_id:
-                next_eid = pattern[1]
-                next_entities[next_eid] = next_entities.get(next_eid, 0) + 1
-
-        sorted_next = sorted(next_entities.items(), key=lambda x: x[1], reverse=True)
-        for i, (eid, count) in enumerate(sorted_next[:5]):
-            predictions.append(PredictedStep(
-                step=i + 1,
-                action=f"可能转向实体 {eid[:8]}",
-                probability=min(count / max(len(patterns), 1), 1.0),
-                reasoning=f"在{count}个已知攻击模式中出现",
-                related_entities=[eid],
-                time_window="未知",
-                risk_level="medium",
-            ))
-
-        return predictions
-
-    async def _cross_validate_predictions(
-        self, predictions: List[PredictedStep], entity_id: str
-    ) -> List[PredictedStep]:
-        if not predictions:
-            return predictions
-
-        validated: List[PredictedStep] = []
-        for pred in predictions:
-            action_text = pred.action
-            try:
-                results = await self.vector_store.search_intelligence(action_text, n_results=3)
-                support_count = 0
-                for result in results:
-                    doc = result.get("document", "")
-                    if doc and any(kw in doc for kw in action_text.split()[:3]):
-                        support_count += 1
-
-                if support_count > 0:
-                    pred.probability = min(pred.probability * 1.1, 1.0)
-                else:
-                    pred.probability = pred.probability * 0.85
-            except Exception:
-                pass
-
-            validated.append(pred)
-
-        return validated
-
-    async def simulate_attack_chain(
-        self, start_entity_id: str, steps: int = 5
-    ) -> SimulatedChain:
+    async def simulate_attack_chain(self, start_entity_id: str, steps: int = 5) -> SimulatedChain:
         entity = await self.knowledge_graph.get_entity(start_entity_id)
         if not entity:
             return SimulatedChain(start_entity=start_entity_id)
 
         all_paths: List[Dict] = []
         critical_junctions: List[Dict] = []
+        current_tactic = self._map_entity_to_tactic(start_entity_id)
 
-        await self._build_path_tree(
-            current_entity_id=start_entity_id,
+        self._simulate_markov_chain(
+            current_tactic=current_tactic,
             current_path=[],
             current_prob=1.0,
             remaining_steps=steps,
             all_paths=all_paths,
             critical_junctions=critical_junctions,
-            visited=set(),
+            visited_tactics=set(),
         )
 
         max_prob_path: List[PredictedStep] = []
         if all_paths:
             best_path = max(all_paths, key=lambda p: p.get("cumulative_probability", 0))
             for i, step_data in enumerate(best_path.get("steps", [])):
+                technique_id = step_data.get("technique_id", "")
+                technique_info = MITRE_TECHNIQUES.get(technique_id, {})
                 max_prob_path.append(PredictedStep(
                     step=i + 1,
                     action=step_data.get("action", ""),
+                    technique_id=technique_id,
+                    technique_name=technique_info.get("name", ""),
                     probability=step_data.get("probability", 0.0),
                     reasoning=step_data.get("reasoning", ""),
                     related_entities=step_data.get("related_entities", []),
@@ -331,15 +435,15 @@ class AttackChainPredictor:
             max_probability_path=max_prob_path,
         )
 
-    async def _build_path_tree(
+    def _simulate_markov_chain(
         self,
-        current_entity_id: str,
+        current_tactic: str,
         current_path: List[Dict],
         current_prob: float,
         remaining_steps: int,
         all_paths: List[Dict],
         critical_junctions: List[Dict],
-        visited: set,
+        visited_tactics: set,
     ) -> None:
         if remaining_steps <= 0 or current_prob < 0.05:
             if current_path:
@@ -349,59 +453,48 @@ class AttackChainPredictor:
                 })
             return
 
-        visited.add(current_entity_id)
+        next_tactics = self._predict_next_tactics(current_tactic, top_k=3)
 
-        try:
-            prediction = await self.predict_next_steps(current_entity_id, depth=2)
-        except Exception as exc:
-            logger.warning(f"Prediction failed during simulation at '{current_entity_id}': {exc}")
-            if current_path:
-                all_paths.append({
-                    "steps": current_path.copy(),
-                    "cumulative_probability": current_prob,
-                })
-            visited.discard(current_entity_id)
-            return
-
-        if not prediction.predictions:
-            if current_path:
-                all_paths.append({
-                    "steps": current_path.copy(),
-                    "cumulative_probability": current_prob,
-                })
-            visited.discard(current_entity_id)
-            return
-
-        if len(prediction.predictions) > 1:
+        if len(next_tactics) > 1:
             critical_junctions.append({
-                "entity_id": current_entity_id,
+                "tactic": current_tactic,
                 "step": len(current_path) + 1,
-                "branch_count": len(prediction.predictions),
-                "branches": [
-                    {"action": p.action, "probability": p.probability}
-                    for p in prediction.predictions
-                ],
+                "branch_count": len(next_tactics),
+                "branches": [{"tactic": t, "probability": p} for t, p in next_tactics],
             })
 
-        for pred in prediction.predictions[:3]:
-            step_data = pred.to_dict()
-            new_prob = current_prob * pred.probability
+        for tactic, tactic_prob in next_tactics:
+            techniques = self._get_techniques_for_tactic(tactic)
+            if not techniques:
+                continue
 
-            next_entity_id = None
-            if pred.related_entities:
-                next_entity_id = pred.related_entities[0]
+            best_technique = min(techniques, key=lambda x: {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(x[1]["risk"], 4))
+            tid, tinfo = best_technique
+
+            new_prob = current_prob * tactic_prob
+            step_data = {
+                "action": f"执行{tinfo['name']}({tid})",
+                "technique_id": tid,
+                "technique_name": tinfo["name"],
+                "probability": tactic_prob,
+                "reasoning": f"马尔可夫链: {current_tactic}→{tactic}(P={tactic_prob:.3f})",
+                "time_window": self._estimate_time_window(tactic),
+                "risk_level": tinfo.get("risk", "medium"),
+                "related_entities": [],
+            }
 
             new_path = current_path + [step_data]
 
-            if next_entity_id and next_entity_id not in visited:
-                await self._build_path_tree(
-                    current_entity_id=next_entity_id,
+            if tactic not in visited_tactics:
+                new_visited = visited_tactics | {tactic}
+                self._simulate_markov_chain(
+                    current_tactic=tactic,
                     current_path=new_path,
                     current_prob=new_prob,
                     remaining_steps=remaining_steps - 1,
                     all_paths=all_paths,
                     critical_junctions=critical_junctions,
-                    visited=visited.copy(),
+                    visited_tactics=new_visited,
                 )
             else:
                 all_paths.append({
@@ -409,89 +502,46 @@ class AttackChainPredictor:
                     "cumulative_probability": new_prob,
                 })
 
-        visited.discard(current_entity_id)
-
-    async def find_early_warning_signals(
-        self, prediction: PredictionResult
-    ) -> List[EarlyWarning]:
+    async def find_early_warning_signals(self, prediction: PredictionResult) -> List[EarlyWarning]:
         warnings: List[EarlyWarning] = []
 
         for pred in prediction.predictions:
-            try:
-                signals = await self._search_signals_for_step(pred)
-                warnings.extend(signals)
-            except Exception as exc:
-                logger.warning(
-                    f"Early warning search failed for step '{pred.action}': {exc}"
-                )
+            search_terms = [pred.technique_name, pred.technique_id, pred.action]
+            for term in search_terms:
+                try:
+                    results = await self.vector_store.search_intelligence(term, n_results=3)
+                    for result in results:
+                        doc = result.get("document", "")
+                        metadata = result.get("metadata", {})
+                        if not doc:
+                            continue
 
-        warnings.sort(
+                        overlap = sum(1 for kw in pred.action.split() if kw in doc)
+                        if overlap >= 1 or pred.technique_id in doc:
+                            urgency = self._determine_urgency(pred, result)
+                            actions = self._generate_recommended_actions(pred, urgency)
+                            warnings.append(EarlyWarning(
+                                predicted_step=pred.action,
+                                signal_description=f"发现与{pred.technique_id}({pred.technique_name})相关的情报活动: {doc[:150]}",
+                                signal_source=metadata.get("source", "unknown"),
+                                urgency=urgency,
+                                recommended_actions=actions,
+                            ))
+                except Exception:
+                    pass
+
+        seen = set()
+        unique_warnings = []
+        for w in warnings:
+            key = (w.predicted_step, w.signal_source)
+            if key not in seen:
+                seen.add(key)
+                unique_warnings.append(w)
+
+        unique_warnings.sort(
             key=lambda w: {"immediate": 0, "urgent": 1, "monitor": 2}.get(w.urgency, 2)
         )
-        return warnings
-
-    async def _search_signals_for_step(self, step: PredictedStep) -> List[EarlyWarning]:
-        warnings: List[EarlyWarning] = []
-        action_keywords = step.action.split()[:5]
-        search_query = " ".join(action_keywords)
-
-        try:
-            results = await self.vector_store.search_intelligence(search_query, n_results=5)
-        except Exception:
-            return warnings
-
-        for result in results:
-            doc = result.get("document", "")
-            metadata = result.get("metadata", {})
-            if not doc:
-                continue
-
-            try:
-                is_signal = await self._llm_check_signal(step.action, doc)
-            except Exception:
-                is_signal = self._heuristic_signal_check(step.action, doc)
-
-            if is_signal:
-                urgency = self._determine_urgency(step, result)
-                actions = self._generate_recommended_actions(step, urgency)
-
-                warnings.append(EarlyWarning(
-                    predicted_step=step.action,
-                    signal_description=f"发现与预测步骤相关的情报活动: {doc[:150]}",
-                    signal_source=metadata.get("source", "unknown"),
-                    urgency=urgency,
-                    recommended_actions=actions,
-                ))
-
-        return warnings
-
-    async def _llm_check_signal(self, predicted_action: str, intelligence_text: str) -> bool:
-        system_prompt = (
-            "你是一个威胁情报预警专家。判断以下情报是否表明预测的攻击步骤正在发生或即将发生。\n"
-            "只回答 '是' 或 '否'。"
-        )
-        prompt = (
-            f"预测的攻击步骤：{predicted_action}\n\n"
-            f"情报内容：{intelligence_text[:500]}\n\n"
-            "该情报是否表明此攻击步骤正在发生或即将发生？"
-        )
-
-        try:
-            response = await self.llm.generate(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.1,
-                max_tokens=10,
-            )
-            return "是" in response.strip()
-        except Exception:
-            return False
-
-    def _heuristic_signal_check(self, predicted_action: str, intelligence_text: str) -> bool:
-        action_words = set(predicted_action.split())
-        intel_words = set(intelligence_text.split())
-        overlap = action_words & intel_words
-        return len(overlap) >= 2
+        return unique_warnings
 
     def _determine_urgency(self, step: PredictedStep, intel_result: Dict) -> str:
         if step.risk_level in ("critical", "high") and step.probability >= 0.7:
@@ -502,19 +552,16 @@ class AttackChainPredictor:
 
     def _generate_recommended_actions(self, step: PredictedStep, urgency: str) -> List[str]:
         actions: List[str] = []
-
         if urgency == "immediate":
             actions.append("立即启动应急响应流程")
-            actions.append(f"针对'{step.action}'加强监控")
+            actions.append(f"针对{step.technique_id}({step.technique_name})加强监控")
             actions.append("通知相关安全团队")
         elif urgency == "urgent":
-            actions.append(f"加强对'{step.action}'相关指标的监控")
+            actions.append(f"加强对{step.technique_name}相关指标的监控")
             actions.append("更新防御规则")
         else:
-            actions.append(f"持续关注'{step.action}'相关动态")
+            actions.append(f"持续关注{step.technique_name}相关动态")
             actions.append("定期复查情报更新")
-
         if step.related_entities:
             actions.append(f"重点关注关联实体: {', '.join(step.related_entities[:5])}")
-
         return actions

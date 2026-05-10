@@ -1,560 +1,391 @@
-import math
+import json
+import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, List, Optional, Set, Tuple
-from uuid import uuid4
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 from loguru import logger
 
 from app.core.knowledge_graph import KnowledgeGraph
-from app.core.llm import LLMService
 from app.core.vector_store import VectorStore
 
 
 @dataclass
-class BehavioralFingerprint:
+class EntityProfile:
     entity_id: str
-    platform: str
-    linguistic_features: Dict = field(default_factory=dict)
-    active_hours: Dict = field(default_factory=dict)
-    operation_types: List[str] = field(default_factory=list)
-    price_patterns: Dict = field(default_factory=dict)
-    social_connections: List[str] = field(default_factory=list)
-    fingerprint_vector: List[float] = field(default_factory=list)
+    entity_type: str
+    value: str
+    platforms: List[str] = field(default_factory=list)
+    behavioral_features: Dict[str, float] = field(default_factory=dict)
+    embedding: Optional[List[float]] = None
 
     def to_dict(self) -> dict:
         return {
             "entity_id": self.entity_id,
-            "platform": self.platform,
-            "linguistic_features": self.linguistic_features,
-            "active_hours": self.active_hours,
-            "operation_types": self.operation_types,
-            "price_patterns": self.price_patterns,
-            "social_connections": self.social_connections,
-            "fingerprint_vector": self.fingerprint_vector,
+            "entity_type": self.entity_type,
+            "value": self.value,
+            "platforms": self.platforms,
+            "behavioral_features": self.behavioral_features,
         }
 
 
 @dataclass
-class AttributionMatch:
+class AttributionResult:
     source_entity_id: str
-    source_platform: str
     target_entity_id: str
+    similarity: float
+    source_platform: str
     target_platform: str
-    overall_similarity: float
-    linguistic_similarity: float = 0.0
-    temporal_similarity: float = 0.0
-    behavioral_similarity: float = 0.0
-    network_similarity: float = 0.0
     evidence: List[str] = field(default_factory=list)
-    confidence: str = "low"
+    confidence: float = 0.0
 
     def to_dict(self) -> dict:
         return {
             "source_entity_id": self.source_entity_id,
-            "source_platform": self.source_platform,
             "target_entity_id": self.target_entity_id,
+            "similarity": self.similarity,
+            "source_platform": self.source_platform,
             "target_platform": self.target_platform,
-            "overall_similarity": self.overall_similarity,
-            "linguistic_similarity": self.linguistic_similarity,
-            "temporal_similarity": self.temporal_similarity,
-            "behavioral_similarity": self.behavioral_similarity,
-            "network_similarity": self.network_similarity,
             "evidence": self.evidence,
             "confidence": self.confidence,
         }
 
 
-@dataclass
-class AttributionReport:
-    entity_id: str
-    primary_platform: str
-    aliases: List[AttributionMatch] = field(default_factory=list)
-    total_platforms: int = 1
-    risk_assessment: str = ""
-    evidence_summary: str = ""
+class TransEModel:
+    def __init__(self, n_entities: int, n_relations: int, embed_dim: int = 64, margin: float = 1.0, norm: int = 2):
+        self.n_entities = n_entities
+        self.n_relations = n_relations
+        self.embed_dim = embed_dim
+        self.margin = margin
+        self.norm = norm
+        bound = 6.0 / (embed_dim ** 0.5)
+        self.entity_embeddings = np.random.uniform(-bound, bound, (n_entities, embed_dim))
+        self.relation_embeddings = np.random.uniform(-bound, bound, (n_relations, embed_dim))
+        self._normalize()
 
-    def to_dict(self) -> dict:
-        return {
-            "entity_id": self.entity_id,
-            "primary_platform": self.primary_platform,
-            "aliases": [a.to_dict() for a in self.aliases],
-            "total_platforms": self.total_platforms,
-            "risk_assessment": self.risk_assessment,
-            "evidence_summary": self.evidence_summary,
+    def _normalize(self):
+        norms = np.linalg.norm(self.entity_embeddings, axis=1, keepdims=True)
+        norms = np.clip(norms, 1e-8, None)
+        self.entity_embeddings = self.entity_embeddings / norms
+        norms = np.linalg.norm(self.relation_embeddings, axis=1, keepdims=True)
+        norms = np.clip(norms, 1e-8, None)
+        self.relation_embeddings = self.relation_embeddings / norms
+
+    def score(self, h: int, r: int, t: int) -> float:
+        h_emb = self.entity_embeddings[h]
+        r_emb = self.relation_embeddings[r]
+        t_emb = self.entity_embeddings[t]
+        diff = h_emb + r_emb - t_emb
+        return float(np.linalg.norm(diff, ord=self.norm))
+
+    def train_step(self, positive_triples: List[Tuple[int, int, int]], lr: float = 0.01, n_neg: int = 1):
+        total_loss = 0.0
+        for h, r, t in positive_triples:
+            pos_score = self.score(h, r, t)
+            for _ in range(n_neg):
+                if np.random.random() < 0.5:
+                    neg_h = np.random.randint(self.n_entities)
+                    neg_score = self.score(neg_h, r, t)
+                else:
+                    neg_t = np.random.randint(self.n_entities)
+                    neg_score = self.score(h, r, neg_t)
+
+                loss = max(0.0, self.margin + pos_score - neg_score)
+                total_loss += loss
+
+                if loss > 0:
+                    grad_pos = self._grad(h, r, t)
+                    if np.random.random() < 0.5:
+                        grad_neg = self._grad(neg_h, r, t)
+                        self.entity_embeddings[h] -= lr * grad_pos
+                        self.entity_embeddings[neg_h] += lr * grad_neg
+                    else:
+                        grad_neg = self._grad(h, r, neg_t)
+                        self.entity_embeddings[h] -= lr * grad_pos
+                        self.entity_embeddings[neg_t] += lr * grad_neg
+                    self.relation_embeddings[r] -= lr * (grad_pos - grad_neg if np.random.random() < 0.5 else grad_pos)
+
+            self._normalize()
+        return total_loss / max(len(positive_triples), 1)
+
+    def _grad(self, h: int, r: int, t: int) -> np.ndarray:
+        diff = self.entity_embeddings[h] + self.relation_embeddings[r] - self.entity_embeddings[t]
+        norm = np.linalg.norm(diff)
+        if norm < 1e-8:
+            return np.zeros_like(diff)
+        if self.norm == 2:
+            return diff / norm
+        return np.sign(diff)
+
+    def get_entity_embedding(self, entity_idx: int) -> np.ndarray:
+        return self.entity_embeddings[entity_idx].copy()
+
+    def save(self, path: str):
+        data = {
+            "n_entities": self.n_entities,
+            "n_relations": self.n_relations,
+            "embed_dim": self.embed_dim,
+            "margin": self.margin,
+            "norm": self.norm,
+            "entity_embeddings": self.entity_embeddings.tolist(),
+            "relation_embeddings": self.relation_embeddings.tolist(),
         }
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    @classmethod
+    def load(cls, path: str) -> "TransEModel":
+        with open(path, "r") as f:
+            data = json.load(f)
+        model = cls(data["n_entities"], data["n_relations"], data["embed_dim"], data["margin"], data["norm"])
+        model.entity_embeddings = np.array(data["entity_embeddings"])
+        model.relation_embeddings = np.array(data["relation_embeddings"])
+        return model
 
 
 class EntityAttribution:
-    WEIGHTS = {
-        "linguistic": 0.3,
-        "temporal": 0.2,
-        "behavioral": 0.3,
-        "network": 0.2,
-    }
-    VECTOR_DIM = 64
+    SIMILARITY_THRESHOLD = 0.6
+    EMBED_DIM = 64
+    TRAIN_EPOCHS = 50
+    TRAIN_LR = 0.01
 
-    def __init__(self, llm: LLMService, vector_store: VectorStore, knowledge_graph: KnowledgeGraph):
-        self.llm = llm
+    def __init__(self, vector_store: VectorStore, knowledge_graph: KnowledgeGraph):
         self.vector_store = vector_store
         self.knowledge_graph = knowledge_graph
-        self._fingerprint_cache: Dict[str, BehavioralFingerprint] = {}
+        self._model: Optional[TransEModel] = None
+        self._entity2idx: Dict[str, int] = {}
+        self._idx2entity: Dict[int, str] = {}
+        self._relation2idx: Dict[str, int] = {}
+        self._idx2relation: Dict[int, str] = {}
+        self._persist_dir = "./model_data/attribution"
+        os.makedirs(self._persist_dir, exist_ok=True)
+        self._try_load_model()
 
-    async def compute_behavioral_fingerprint(self, entity_id: str) -> BehavioralFingerprint:
-        if entity_id in self._fingerprint_cache:
-            return self._fingerprint_cache[entity_id]
-
-        entity = await self.knowledge_graph.get_entity(entity_id)
-        if not entity:
-            return BehavioralFingerprint(entity_id=entity_id, platform="unknown")
-
-        platform = entity.metadata.get("source", entity.metadata.get("platform", "unknown"))
-
-        intelligence_texts = await self._gather_entity_intelligence(entity_id)
-        relations = await self.knowledge_graph.get_entity_relations(entity_id)
-
-        linguistic_features = await self._extract_linguistic_features(
-            entity_id, intelligence_texts
-        )
-        active_hours = self._extract_active_hours(intelligence_texts)
-        operation_types = await self._extract_operation_types(
-            entity_id, intelligence_texts
-        )
-        price_patterns = self._extract_price_patterns(intelligence_texts)
-        social_connections = self._extract_social_connections(entity_id, relations)
-
-        fingerprint_vector = self._build_fingerprint_vector(
-            linguistic_features, active_hours, operation_types, price_patterns, social_connections
-        )
-
-        fingerprint = BehavioralFingerprint(
-            entity_id=entity_id,
-            platform=platform,
-            linguistic_features=linguistic_features,
-            active_hours=active_hours,
-            operation_types=operation_types,
-            price_patterns=price_patterns,
-            social_connections=social_connections,
-            fingerprint_vector=fingerprint_vector,
-        )
-
-        self._fingerprint_cache[entity_id] = fingerprint
-        return fingerprint
-
-    async def _gather_entity_intelligence(self, entity_id: str) -> List[Dict]:
-        results = await self.vector_store.search_intelligence(entity_id, n_results=20)
-        texts: List[Dict] = []
-        for result in results:
-            doc = result.get("document", "")
-            metadata = result.get("metadata", {})
-            if doc:
-                texts.append({
-                    "content": doc,
-                    "timestamp": metadata.get("collected_at", metadata.get("timestamp", "")),
-                    "source": metadata.get("source", "unknown"),
-                })
-        return texts
-
-    async def _extract_linguistic_features(
-        self, entity_id: str, intelligence_texts: List[Dict]
-    ) -> Dict:
-        if not intelligence_texts:
-            return {}
-
-        combined_text = "\n".join(t.get("content", "")[:300] for t in intelligence_texts[:10])
-
+    def _try_load_model(self) -> bool:
+        model_path = os.path.join(self._persist_dir, "transe_model.json")
+        meta_path = os.path.join(self._persist_dir, "metadata.json")
+        if not os.path.exists(model_path) or not os.path.exists(meta_path):
+            return False
         try:
-            system_prompt = (
-                "你是一个文本风格分析专家。分析以下文本的写作风格特征。\n"
-                "输出JSON格式：\n"
-                '{"avg_sentence_length":20.5,"emoji_frequency":0.1,'
-                '"punctuation_style":"heavy","formality_level":0.3,'
-                '"dialect_markers":["标记1"],"common_phrases":["短语1"],'
-                '"sentence_pattern":"short_imperative"}\n'
-                "只返回JSON，不要其他内容。"
-            )
-            prompt = f"分析以下文本的写作风格：\n\n{combined_text[:2000]}"
-
-            result = await self.llm.generate_json(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.2,
-            )
-            return result
+            self._model = TransEModel.load(model_path)
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+            self._entity2idx = meta.get("entity2idx", {})
+            self._idx2entity = {int(v): k for k, v in self._entity2idx.items()}
+            self._relation2idx = meta.get("relation2idx", {})
+            self._idx2relation = {int(v): k for k, v in self._relation2idx.items()}
+            logger.info(f"TransE model loaded: {self._model.n_entities} entities, {self._model.n_relations} relations")
+            return True
         except Exception as exc:
-            logger.warning(f"LLM linguistic feature extraction failed for '{entity_id}': {exc}")
-            return self._heuristic_linguistic_features(combined_text)
+            logger.warning(f"Failed to load TransE model: {exc}")
+            return False
 
-    def _heuristic_linguistic_features(self, text: str) -> Dict:
-        sentences = text.split("。")
-        sentences = [s.strip() for s in sentences if s.strip()]
-        avg_len = sum(len(s) for s in sentences) / max(len(sentences), 1)
+    def _save_model(self):
+        if self._model is None:
+            return
+        model_path = os.path.join(self._persist_dir, "transe_model.json")
+        meta_path = os.path.join(self._persist_dir, "metadata.json")
+        self._model.save(model_path)
+        with open(meta_path, "w") as f:
+            json.dump({
+                "entity2idx": self._entity2idx,
+                "relation2idx": self._relation2idx,
+            }, f)
+        logger.info(f"TransE model saved: {self._model.n_entities} entities")
 
-        emoji_count = sum(1 for c in text if ord(c) > 0x1F000)
-        emoji_freq = emoji_count / max(len(text), 1)
+    def train_from_graph(self):
+        if not self.knowledge_graph.graph or self.knowledge_graph.graph.number_of_nodes() == 0:
+            logger.warning("Knowledge graph empty, cannot train TransE")
+            return
 
-        return {
-            "avg_sentence_length": avg_len,
-            "emoji_frequency": round(emoji_freq, 4),
-            "punctuation_style": "normal",
-            "formality_level": 0.5,
-            "dialect_markers": [],
-            "common_phrases": [],
-            "sentence_pattern": "unknown",
-        }
+        entities = list(self.knowledge_graph.graph.nodes())
+        relations = set()
+        triples = []
 
-    def _extract_active_hours(self, intelligence_texts: List[Dict]) -> Dict:
-        hours: Counter = Counter()
-        for item in intelligence_texts:
-            timestamp = item.get("timestamp", "")
-            if not timestamp:
-                continue
-            try:
-                if isinstance(timestamp, str):
-                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    hours[dt.hour] += 1
-            except (ValueError, TypeError):
-                continue
+        for idx, eid in enumerate(entities):
+            self._entity2idx[eid] = idx
+            self._idx2entity[idx] = eid
 
-        total = sum(hours.values())
-        if total == 0:
-            return {str(h): 0 for h in range(24)}
+        for u, v, data in self.knowledge_graph.graph.edges(data=True):
+            rtype = data.get("relation_type", "related_to")
+            if rtype not in self._relation2idx:
+                ridx = len(self._relation2idx)
+                self._relation2idx[rtype] = ridx
+                self._idx2relation[ridx] = rtype
+            relations.add(rtype)
+            triples.append((self._entity2idx[u], self._relation2idx[rtype], self._entity2idx[v]))
 
-        return {str(h): hours.get(h, 0) / total for h in range(24)}
+        if len(triples) < 2:
+            logger.warning("Too few triples for TransE training")
+            return
 
-    async def _extract_operation_types(
-        self, entity_id: str, intelligence_texts: List[Dict]
-    ) -> List[str]:
-        relations = await self.knowledge_graph.get_entity_relations(entity_id)
-        operation_types: Set[str] = set()
-
-        for rel in relations:
-            rel_type = rel.type.value if hasattr(rel.type, "value") else str(rel.type)
-            operation_types.add(rel_type)
-
-        if intelligence_texts and len(operation_types) < 2:
-            combined = " ".join(t.get("content", "")[:200] for t in intelligence_texts[:5])
-            try:
-                system_prompt = (
-                    "你是一个黑灰产行为分析专家。从以下文本中提取该实体的行为类型。\n"
-                    "输出JSON数组，如：[\"selling\",\"recruiting\",\"advertising\"]\n"
-                    "可选值：selling/buying/recruiting/advertising/laundering/"
-                    "hacking/phishing/spamming/other\n"
-                    "只返回JSON数组，不要其他内容。"
-                )
-                prompt = f"分析以下文本中实体的行为类型：\n\n{combined[:1500]}"
-
-                result = await self.llm.generate_json(
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    temperature=0.2,
-                )
-                if isinstance(result, list):
-                    operation_types.update(result)
-                elif isinstance(result, dict):
-                    ops = result.get("operations", result.get("types", []))
-                    if isinstance(ops, list):
-                        operation_types.update(ops)
-            except Exception as exc:
-                logger.warning(f"LLM operation extraction failed for '{entity_id}': {exc}")
-
-        return list(operation_types)
-
-    def _extract_price_patterns(self, intelligence_texts: List[Dict]) -> Dict:
-        import re
-
-        prices: List[float] = []
-        for item in intelligence_texts:
-            content = item.get("content", "")
-            price_matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:元|块|万|¥|￥|CNY|RMB)", content)
-            for p in price_matches:
-                try:
-                    prices.append(float(p))
-                except ValueError:
-                    continue
-
-        if not prices:
-            return {"has_pricing": False, "avg_price": 0.0, "price_range": "", "round_preference": 0.0}
-
-        avg_price = sum(prices) / len(prices)
-        min_price = min(prices)
-        max_price = max(prices)
-        round_count = sum(1 for p in prices if p == int(p))
-        round_preference = round_count / len(prices)
-
-        return {
-            "has_pricing": True,
-            "avg_price": round(avg_price, 2),
-            "price_range": f"{min_price}-{max_price}",
-            "round_preference": round(round_preference, 2),
-            "price_count": len(prices),
-        }
-
-    def _extract_social_connections(
-        self, entity_id: str, relations: list
-    ) -> List[str]:
-        connections: List[str] = []
-        for rel in relations:
-            if rel.source_entity_id == entity_id:
-                connections.append(rel.target_entity_id)
-            else:
-                connections.append(rel.source_entity_id)
-        return connections[:50]
-
-    def _build_fingerprint_vector(
-        self,
-        linguistic: Dict,
-        active_hours: Dict,
-        operations: List[str],
-        prices: Dict,
-        connections: List[str],
-    ) -> List[float]:
-        vector: List[float] = []
-
-        avg_sent_len = float(linguistic.get("avg_sentence_length", 0)) / 100.0
-        vector.append(min(avg_sent_len, 1.0))
-
-        emoji_freq = float(linguistic.get("emoji_frequency", 0))
-        vector.append(min(emoji_freq, 1.0))
-
-        formality = float(linguistic.get("formality_level", 0.5))
-        vector.append(formality)
-
-        dialect_count = len(linguistic.get("dialect_markers", []))
-        vector.append(min(dialect_count / 5.0, 1.0))
-
-        phrase_count = len(linguistic.get("common_phrases", []))
-        vector.append(min(phrase_count / 10.0, 1.0))
-
-        for h in range(24):
-            vector.append(float(active_hours.get(str(h), 0)))
-
-        operation_categories = [
-            "selling", "buying", "recruiting", "advertising",
-            "laundering", "hacking", "phishing", "spamming", "other",
-        ]
-        for op in operation_categories:
-            vector.append(1.0 if op in operations else 0.0)
-
-        vector.append(1.0 if prices.get("has_pricing", False) else 0.0)
-        vector.append(min(float(prices.get("avg_price", 0)) / 10000.0, 1.0))
-        vector.append(float(prices.get("round_preference", 0)))
-
-        vector.append(min(len(connections) / 20.0, 1.0))
-
-        while len(vector) < self.VECTOR_DIM:
-            vector.append(0.0)
-
-        return vector[:self.VECTOR_DIM]
-
-    async def find_same_entity(
-        self, entity_id: str, threshold: float = 0.7
-    ) -> List[AttributionMatch]:
-        source_fp = await self.compute_behavioral_fingerprint(entity_id)
-
-        all_entities = []
-        for eid in self.knowledge_graph._entities:
-            if eid != entity_id:
-                all_entities.append(eid)
-
-        matches: List[AttributionMatch] = []
-
-        for target_id in all_entities:
-            try:
-                target_fp = await self.compute_behavioral_fingerprint(target_id)
-
-                if source_fp.platform == target_fp.platform:
-                    continue
-
-                ling_sim = self._cosine_similarity_dict(
-                    source_fp.linguistic_features, target_fp.linguistic_features
-                )
-                temp_sim = self._cosine_similarity_hours(
-                    source_fp.active_hours, target_fp.active_hours
-                )
-                behav_sim = self._jaccard_similarity(
-                    set(source_fp.operation_types), set(target_fp.operation_types)
-                )
-                net_sim = self._jaccard_similarity(
-                    set(source_fp.social_connections), set(target_fp.social_connections)
-                )
-
-                overall = (
-                    self.WEIGHTS["linguistic"] * ling_sim
-                    + self.WEIGHTS["temporal"] * temp_sim
-                    + self.WEIGHTS["behavioral"] * behav_sim
-                    + self.WEIGHTS["network"] * net_sim
-                )
-
-                if overall >= threshold:
-                    evidence = self._build_evidence(
-                        ling_sim, temp_sim, behav_sim, net_sim, source_fp, target_fp
-                    )
-                    confidence = "high" if overall >= 0.85 else ("medium" if overall >= 0.75 else "low")
-
-                    matches.append(AttributionMatch(
-                        source_entity_id=entity_id,
-                        source_platform=source_fp.platform,
-                        target_entity_id=target_id,
-                        target_platform=target_fp.platform,
-                        overall_similarity=round(overall, 4),
-                        linguistic_similarity=round(ling_sim, 4),
-                        temporal_similarity=round(temp_sim, 4),
-                        behavioral_similarity=round(behav_sim, 4),
-                        network_similarity=round(net_sim, 4),
-                        evidence=evidence,
-                        confidence=confidence,
-                    ))
-            except Exception as exc:
-                logger.warning(f"Attribution comparison failed for '{entity_id}' vs '{target_id}': {exc}")
-                continue
-
-        matches.sort(key=lambda m: m.overall_similarity, reverse=True)
-        return matches
-
-    async def generate_attribution_report(self, entity_id: str) -> AttributionReport:
-        source_fp = await self.compute_behavioral_fingerprint(entity_id)
-        entity = await self.knowledge_graph.get_entity(entity_id)
-
-        primary_platform = source_fp.platform
-
-        try:
-            matches = await self.find_same_entity(entity_id, threshold=0.5)
-        except Exception as exc:
-            logger.error(f"Attribution search failed for '{entity_id}': {exc}")
-            matches = []
-
-        all_platforms = {primary_platform}
-        for match in matches:
-            all_platforms.add(match.target_platform)
-
-        risk_assessment = self._assess_attribution_risk(matches)
-        evidence_summary = self._build_evidence_summary(entity_id, matches)
-
-        return AttributionReport(
-            entity_id=entity_id,
-            primary_platform=primary_platform,
-            aliases=matches,
-            total_platforms=len(all_platforms),
-            risk_assessment=risk_assessment,
-            evidence_summary=evidence_summary,
+        self._model = TransEModel(
+            n_entities=len(entities),
+            n_relations=len(self._relation2idx),
+            embed_dim=self.EMBED_DIM,
         )
 
-    def _assess_attribution_risk(self, matches: List[AttributionMatch]) -> str:
-        if not matches:
-            return "未发现跨平台关联，威胁范围有限"
+        logger.info(f"Training TransE: {len(triples)} triples, {len(entities)} entities, {len(self._relation2idx)} relations")
 
-        high_conf_matches = [m for m in matches if m.confidence == "high"]
-        medium_conf_matches = [m for m in matches if m.confidence == "medium"]
+        for epoch in range(self.TRAIN_EPOCHS):
+            np.random.shuffle(triples)
+            batch = triples[:min(64, len(triples))]
+            loss = self._model.train_step(batch, lr=self.TRAIN_LR)
+            if (epoch + 1) % 10 == 0:
+                logger.info(f"TransE epoch {epoch + 1}/{self.TRAIN_EPOCHS}, loss: {loss:.4f}")
 
-        platforms = set()
-        for m in matches:
-            platforms.add(m.target_platform)
+        self._save_model()
+        logger.info("TransE training complete")
 
-        if high_conf_matches:
-            return (
-                f"高风险：发现{len(high_conf_matches)}个高置信度跨平台关联，"
-                f"涉及{len(platforms)}个平台，该实体可能运营大规模跨平台犯罪网络"
-            )
-        if medium_conf_matches:
-            return (
-                f"中风险：发现{len(medium_conf_matches)}个中等置信度跨平台关联，"
-                f"涉及{len(platforms)}个平台，建议持续监控"
-            )
-        return (
-            f"低风险：发现{len(matches)}个低置信度跨平台关联，"
-            f"需要更多证据确认"
-        )
+    async def attribute_entity(self, entity_id: str, threshold: float = None) -> List[AttributionResult]:
+        if threshold is None:
+            threshold = self.SIMILARITY_THRESHOLD
 
-    def _build_evidence_summary(
-        self, entity_id: str, matches: List[AttributionMatch]
-    ) -> str:
-        if not matches:
-            return f"实体{entity_id[:8]}未发现跨平台关联证据"
+        if self._model is None:
+            self._try_load_model()
 
-        parts = [f"实体{entity_id[:8]}的跨平台归因分析："]
-        for i, match in enumerate(matches[:5]):
-            parts.append(
-                f"{i+1}. 与{match.target_platform}平台实体{match.target_entity_id[:8]}的"
-                f"综合相似度为{match.overall_similarity:.2f}（{match.confidence}置信度）"
-            )
-            if match.evidence:
-                parts.append(f"   关键证据: {'; '.join(match.evidence[:3])}")
+        if self._model is None or entity_id not in self._entity2idx:
+            return []
 
-        return "\n".join(parts)
+        entity_idx = self._entity2idx[entity_id]
+        entity_emb = self._model.get_entity_embedding(entity_idx)
 
-    def _build_evidence(
-        self,
-        ling_sim: float,
-        temp_sim: float,
-        behav_sim: float,
-        net_sim: float,
-        source_fp: BehavioralFingerprint,
-        target_fp: BehavioralFingerprint,
-    ) -> List[str]:
-        evidence: List[str] = []
+        source_entity = await self.knowledge_graph.get_entity(entity_id)
+        source_type = source_entity.type.value if source_entity and hasattr(source_entity.type, 'value') else "unknown"
+        source_platform = self._infer_platform(source_type)
 
-        if ling_sim > 0.6:
-            evidence.append(f"写作风格相似度{ling_sim:.2f}")
-        if temp_sim > 0.6:
-            evidence.append(f"活跃时间模式相似度{temp_sim:.2f}")
-        if behav_sim > 0.5:
-            common_ops = set(source_fp.operation_types) & set(target_fp.operation_types)
-            if common_ops:
-                evidence.append(f"共同行为类型: {', '.join(common_ops)}")
-        if net_sim > 0.3:
-            common_connections = set(source_fp.social_connections) & set(target_fp.social_connections)
-            if common_connections:
-                evidence.append(f"共同社交连接: {len(common_connections)}个")
+        similarities = []
+        for other_id, other_idx in self._entity2idx.items():
+            if other_id == entity_id:
+                continue
+            other_emb = self._model.get_entity_embedding(other_idx)
+            norm_e = np.linalg.norm(entity_emb)
+            norm_o = np.linalg.norm(other_emb)
+            if norm_e < 1e-8 or norm_o < 1e-8:
+                continue
+            sim = float(np.dot(entity_emb, other_emb) / (norm_e * norm_o))
+            if sim >= threshold:
+                similarities.append((other_id, sim))
 
+        similarities.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for target_id, sim in similarities[:10]:
+            target_entity = await self.knowledge_graph.get_entity(target_id)
+            target_type = target_entity.type.value if target_entity and hasattr(target_entity.type, 'value') else "unknown"
+            target_platform = self._infer_platform(target_type)
+
+            evidence = self._generate_evidence(entity_id, target_id, sim, source_type, target_type)
+
+            results.append(AttributionResult(
+                source_entity_id=entity_id,
+                target_entity_id=target_id,
+                similarity=round(sim, 4),
+                source_platform=source_platform,
+                target_platform=target_platform,
+                evidence=evidence,
+                confidence=round(sim * 0.9, 4),
+            ))
+
+        logger.info(f"TransE attribution: {len(results)} matches for entity {entity_id[:8]}")
+        return results
+
+    def _infer_platform(self, entity_type: str) -> str:
+        platform_map = {
+            "ip_address": "network", "domain": "network", "url": "web",
+            "email": "email", "phone": "telecom", "malware": "darkweb",
+            "hash": "darkweb", "tool": "darkweb", "person": "social",
+            "organization": "business", "financial_account": "financial",
+        }
+        return platform_map.get(entity_type, "unknown")
+
+    def _generate_evidence(self, src_id: str, tgt_id: str, sim: float, src_type: str, tgt_type: str) -> List[str]:
+        evidence = [f"TransE嵌入余弦相似度: {sim:.4f}"]
+        if src_type == tgt_type:
+            evidence.append(f"实体类型一致: {src_type}")
+        common_relations = self._find_common_relations(src_id, tgt_id)
+        if common_relations:
+            evidence.append(f"共享关系类型: {', '.join(common_relations[:3])}")
         return evidence
 
-    @staticmethod
-    def _cosine_similarity_hours(hours_a: Dict, hours_b: Dict) -> float:
-        vec_a = [float(hours_a.get(str(h), 0)) for h in range(24)]
-        vec_b = [float(hours_b.get(str(h), 0)) for h in range(24)]
+    def _find_common_relations(self, src_id: str, tgt_id: str) -> List[str]:
+        src_relations = set()
+        tgt_relations = set()
+        if src_id in self.knowledge_graph.graph:
+            for _, _, data in self.knowledge_graph.graph.out_edges(src_id, data=True):
+                src_relations.add(data.get("relation_type", ""))
+            for _, _, data in self.knowledge_graph.graph.in_edges(src_id, data=True):
+                src_relations.add(data.get("relation_type", ""))
+        if tgt_id in self.knowledge_graph.graph:
+            for _, _, data in self.knowledge_graph.graph.out_edges(tgt_id, data=True):
+                tgt_relations.add(data.get("relation_type", ""))
+            for _, _, data in self.knowledge_graph.graph.in_edges(tgt_id, data=True):
+                tgt_relations.add(data.get("relation_type", ""))
+        return list(src_relations & tgt_relations - {""})
 
-        dot = sum(a * b for a, b in zip(vec_a, vec_b))
-        mag_a = math.sqrt(sum(a * a for a in vec_a))
-        mag_b = math.sqrt(sum(b * b for b in vec_b))
+    async def find_similar_entities(self, entity_id: str, top_k: int = 5) -> List[AttributionResult]:
+        return await self.attribute_entity(entity_id, threshold=0.3)[:top_k]
 
-        if mag_a == 0 or mag_b == 0:
-            return 0.0
-        return dot / (mag_a * mag_b)
+    async def build_entity_profile(self, entity_id: str) -> EntityProfile:
+        entity = await self.knowledge_graph.get_entity(entity_id)
+        if not entity:
+            return EntityProfile(entity_id=entity_id, entity_type="unknown", value="unknown")
 
-    @staticmethod
-    def _cosine_similarity_dict(dict_a: Dict, dict_b: Dict) -> float:
-        all_keys = set(dict_a.keys()) | set(dict_b.keys())
-        if not all_keys:
-            return 0.0
+        entity_type = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
+        features = self._compute_behavioral_features(entity_id)
+        embedding = None
+        if self._model and entity_id in self._entity2idx:
+            emb = self._model.get_entity_embedding(self._entity2idx[entity_id])
+            embedding = emb.tolist()
 
-        vec_a = []
-        vec_b = []
-        for key in all_keys:
-            val_a = dict_a.get(key, 0)
-            val_b = dict_b.get(key, 0)
-            if isinstance(val_a, (int, float)) and isinstance(val_b, (int, float)):
-                vec_a.append(float(val_a))
-                vec_b.append(float(val_b))
+        return EntityProfile(
+            entity_id=entity_id,
+            entity_type=entity_type,
+            value=entity.value,
+            platforms=[self._infer_platform(entity_type)],
+            behavioral_features=features,
+            embedding=embedding,
+        )
 
-        if not vec_a:
-            return 0.0
+    def _compute_behavioral_features(self, entity_id: str) -> Dict[str, float]:
+        features = {}
+        if entity_id not in self.knowledge_graph.graph:
+            return features
+        out_deg = self.knowledge_graph.graph.out_degree(entity_id)
+        in_deg = self.knowledge_graph.graph.in_degree(entity_id)
+        features["out_degree"] = float(out_deg)
+        features["in_degree"] = float(in_deg)
+        features["centrality"] = float(out_deg + in_deg) / max(self.knowledge_graph.graph.number_of_nodes(), 1)
 
-        dot = sum(a * b for a, b in zip(vec_a, vec_b))
-        mag_a = math.sqrt(sum(a * a for a in vec_a))
-        mag_b = math.sqrt(sum(b * b for b in vec_b))
+        relation_types = Counter()
+        for _, _, data in self.knowledge_graph.graph.out_edges(entity_id, data=True):
+            relation_types[data.get("relation_type", "unknown")] += 1
+        for _, _, data in self.knowledge_graph.graph.in_edges(entity_id, data=True):
+            relation_types[data.get("relation_type", "unknown")] += 1
+        features["relation_diversity"] = float(len(relation_types))
+        if relation_types:
+            features["dominant_relation_ratio"] = float(relation_types.most_common(1)[0][1]) / max(sum(relation_types.values()), 1)
+        return features
 
-        if mag_a == 0 or mag_b == 0:
-            return 0.0
-        return dot / (mag_a * mag_b)
+    def compute_behavioral_fingerprint(self, entity_id: str) -> str:
+        features = self._compute_behavioral_features(entity_id)
+        if not features:
+            return ""
+        fingerprint_str = json.dumps(features, sort_keys=True)
+        import hashlib
+        return hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
 
-    @staticmethod
-    def _jaccard_similarity(set_a: set, set_b: set) -> float:
-        if not set_a and not set_b:
-            return 1.0
-        if not set_a or not set_b:
-            return 0.0
-        intersection = set_a & set_b
-        union = set_a | set_b
-        return len(intersection) / len(union)
+    async def find_same_entity(self, entity_id: str) -> List[AttributionResult]:
+        return await self.attribute_entity(entity_id, threshold=0.8)
+
+    async def generate_attribution_report(self, entity_id: str) -> Dict:
+        profile = await self.build_entity_profile(entity_id)
+        attributions = await self.attribute_entity(entity_id)
+        return {
+            "profile": profile.to_dict(),
+            "attributions": [a.to_dict() for a in attributions],
+            "total_matches": len(attributions),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
