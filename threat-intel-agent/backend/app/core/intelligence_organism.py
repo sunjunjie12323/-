@@ -1,3 +1,4 @@
+import asyncio
 import json
 import math
 import os
@@ -207,6 +208,7 @@ class IntelligenceOrganismEngine:
         self.organisms: Dict[str, IntelligenceOrganism] = {}
         self.prediction_trackers: Dict[str, PredictionTracker] = {}
         self.genes: Dict[str, IntelligenceGene] = {}
+        self._persist_lock = asyncio.Lock()
         self._load_from_disk()
 
     def _load_from_disk(self):
@@ -237,24 +239,25 @@ class IntelligenceOrganismEngine:
             logger.warning(f"Failed to load organism data from disk: {exc}, starting fresh")
 
     async def save_to_disk(self):
-        persist_dir = Path(self.persist_dir)
-        persist_dir.mkdir(parents=True, exist_ok=True)
-        persist_path = persist_dir / self.PERSIST_FILE
+        async with self._persist_lock:
+            persist_dir = Path(self.persist_dir)
+            persist_dir.mkdir(parents=True, exist_ok=True)
+            persist_path = persist_dir / self.PERSIST_FILE
 
-        try:
-            data = {
-                "organisms": {oid: o.to_dict() for oid, o in self.organisms.items()},
-                "prediction_trackers": {pid: p.to_dict() for pid, p in self.prediction_trackers.items()},
-                "genes": {gid: g.to_dict() for gid, g in self.genes.items()},
-                "saved_at": datetime.utcnow().isoformat(),
-            }
-            tmp_path = persist_path.with_suffix(".tmp")
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, default=str)
-            tmp_path.replace(persist_path)
-            logger.debug(f"Organism data saved to disk ({len(self.organisms)} organisms, {len(self.genes)} genes)")
-        except Exception as exc:
-            logger.error(f"Failed to save organism data to disk: {exc}")
+            try:
+                data = {
+                    "organisms": {oid: o.to_dict() for oid, o in self.organisms.items()},
+                    "prediction_trackers": {pid: p.to_dict() for pid, p in self.prediction_trackers.items()},
+                    "genes": {gid: g.to_dict() for gid, g in self.genes.items()},
+                    "saved_at": datetime.utcnow().isoformat(),
+                }
+                tmp_path = persist_path.with_suffix(".tmp")
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, default=str)
+                tmp_path.replace(persist_path)
+                logger.debug(f"Organism data saved to disk ({len(self.organisms)} organisms, {len(self.genes)} genes)")
+            except Exception as exc:
+                logger.error(f"Failed to save organism data to disk: {exc}")
 
     async def spawn_organism(
         self, intelligence_id: str, species: str, initial_data: Dict
@@ -1225,10 +1228,14 @@ class IntelligenceOrganismEngine:
 
     def _has_new_evidence(self, tracker: PredictionTracker) -> bool:
         try:
+            entity_id = tracker.entity_id
+            organism = self.organisms.get(entity_id)
+            if organism and organism.mention_count > 1:
+                return True
             for step in tracker.predicted_steps:
                 action = step.get("action", "")
-                if not action:
-                    continue
+                if action:
+                    return True
             return False
         except Exception:
             return False

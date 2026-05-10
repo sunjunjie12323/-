@@ -104,7 +104,14 @@ const GraphView: React.FC = () => {
     fetchStats();
   }, [fetchGraphData, fetchStats]);
 
+  const resizeHandlerRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
+    if (resizeHandlerRef.current) {
+      window.removeEventListener('resize', resizeHandlerRef.current);
+      resizeHandlerRef.current = null;
+    }
+
     if (!graphData || !containerRef.current) return;
 
     const renderGraph = async () => {
@@ -218,10 +225,7 @@ const GraphView: React.FC = () => {
           }
         };
         window.addEventListener('resize', handleResize);
-
-        return () => {
-          window.removeEventListener('resize', handleResize);
-        };
+        resizeHandlerRef.current = handleResize;
       } catch (err) {
         console.error('G6 rendering failed:', err);
       }
@@ -276,7 +280,9 @@ const GraphView: React.FC = () => {
       cancelText: '取消',
       onOk: async () => {
         try {
+          await graphApi.deleteEntity(entityId);
           message.success('实体已删除');
+          setSelectedNode(null);
           fetchGraphData();
           fetchStats();
         } catch (err) {

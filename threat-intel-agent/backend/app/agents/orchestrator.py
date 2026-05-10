@@ -47,6 +47,8 @@ class OrchestratorAgent:
 
         self.logger = logger.bind(agent="orchestrator")
         self.execution_history: List[Dict] = []
+        self._plan_cache: Dict[str, List[Dict]] = {}
+        self._plan_cache_max = 50
 
     async def execute_query(
         self, query: str, context: Dict = None
@@ -63,46 +65,81 @@ class OrchestratorAgent:
                 f"Execution plan [{execution_id}]: {len(plan)} steps"
             )
 
-            results: List[Dict] = []
             collected_items: List[Dict] = []
             cleaned_items: List[Dict] = []
             analyzed_items: List[Dict] = []
+            results: List[Dict] = []
 
-            for step_idx, step in enumerate(plan):
-                agent_name = step.get("agent", "")
-                task = step.get("task", {})
+            collector_steps = [s for s in plan if s.get("agent") == "collector"]
+            other_steps = [s for s in plan if s.get("agent") != "collector"]
 
-                self.logger.info(
-                    f"Step {step_idx + 1}/{len(plan)}: {agent_name} - "
-                    f"{task.get('type', 'unknown')}"
-                )
-
+            if collector_steps:
+                step = collector_steps[0]
                 step_result = await self._execute_agent_step(
-                    agent_name, task, context
+                    step.get("agent", ""), step.get("task", {}), context
                 )
-
                 results.append({
-                    "step": step_idx + 1,
-                    "agent": agent_name,
-                    "task_type": task.get("type", "unknown"),
+                    "step": 1,
+                    "agent": step.get("agent", ""),
+                    "task_type": step.get("task", {}).get("type", "unknown"),
                     "result": step_result,
                 })
+                if step_result.get("status") == "success":
+                    collected_items.extend(
+                        step_result.get("data", {}).get("items", [])
+                    )
 
-                if agent_name == "collector" and step_result.get("status") == "success":
-                    items = step_result.get("data", {}).get("items", [])
-                    collected_items.extend(items)
+            parallel_groups: List[List[Dict]] = []
+            current_group: List[Dict] = []
+            for step in other_steps:
+                agent = step.get("agent", "")
+                if agent in ("cleaner", "graph_builder"):
+                    current_group.append(step)
+                else:
+                    if current_group:
+                        parallel_groups.append(current_group)
+                        current_group = []
+                    parallel_groups.append([step])
+            if current_group:
+                parallel_groups.append(current_group)
 
-                if agent_name == "cleaner" and step_result.get("status") == "success":
-                    data = step_result.get("data", {})
-                    if "cleaned_intelligence" in data:
-                        cleaned_items.append(data["cleaned_intelligence"])
-                    if "cleaned_intelligences" in data:
-                        cleaned_items.extend(data["cleaned_intelligences"])
-
-                if agent_name == "analyst" and step_result.get("status") == "success":
-                    data = step_result.get("data", {})
-                    if "analyzed_intelligence" in data:
-                        analyzed_items.append(data["analyzed_intelligence"])
+            step_idx = len(results)
+            for group in parallel_groups:
+                if len(group) == 1:
+                    step = group[0]
+                    step_idx += 1
+                    step_result = await self._execute_agent_step(
+                        step.get("agent", ""), step.get("task", {}), context
+                    )
+                    results.append({
+                        "step": step_idx,
+                        "agent": step.get("agent", ""),
+                        "task_type": step.get("task", {}).get("type", "unknown"),
+                        "result": step_result,
+                    })
+                    self._collect_step_data(step.get("agent", ""), step_result,
+                                            cleaned_items, analyzed_items)
+                else:
+                    tasks = []
+                    for step in group:
+                        tasks.append(
+                            self._execute_agent_step(
+                                step.get("agent", ""), step.get("task", {}), context
+                            )
+                        )
+                    step_results = await asyncio.gather(*tasks, return_exceptions=True)
+                    for i, (step, sr) in enumerate(zip(group, step_results)):
+                        step_idx += 1
+                        if isinstance(sr, Exception):
+                            sr = {"status": "failed", "errors": [str(sr)]}
+                        results.append({
+                            "step": step_idx,
+                            "agent": step.get("agent", ""),
+                            "task_type": step.get("task", {}).get("type", "unknown"),
+                            "result": sr,
+                        })
+                        self._collect_step_data(step.get("agent", ""), sr,
+                                                cleaned_items, analyzed_items)
 
             aggregated = await self._aggregate_results(results, query)
 
@@ -257,6 +294,20 @@ class OrchestratorAgent:
             "report": report_data,
         }
 
+    def _collect_step_data(self, agent_name: str, step_result: Dict,
+                           cleaned_items: List[Dict], analyzed_items: List[Dict]):
+        if step_result.get("status") != "success":
+            return
+        data = step_result.get("data", {})
+        if agent_name == "cleaner":
+            if "cleaned_intelligence" in data:
+                cleaned_items.append(data["cleaned_intelligence"])
+            if "cleaned_intelligences" in data:
+                cleaned_items.extend(data["cleaned_intelligences"])
+        elif agent_name == "analyst":
+            if "analyzed_intelligence" in data:
+                analyzed_items.append(data["analyzed_intelligence"])
+
     async def _plan_execution(self, query: str) -> List[Dict]:
         system_prompt = (
             "你是一个黑灰产情报分析任务规划专家。根据用户的查询，"
@@ -284,6 +335,11 @@ class OrchestratorAgent:
         )
 
         try:
+            cache_key = query.strip().lower()[:100]
+            if cache_key in self._plan_cache:
+                self.logger.info(f"Using cached plan for: {query[:50]}")
+                return self._plan_cache[cache_key]
+
             result = await self.llm.generate_json(
                 prompt=prompt,
                 system_prompt=system_prompt,
@@ -299,6 +355,10 @@ class OrchestratorAgent:
                     if agent in ("collector", "cleaner", "analyst", "graph_builder"):
                         validated_plan.append(step)
                 if validated_plan:
+                    if len(self._plan_cache) >= self._plan_cache_max:
+                        oldest_key = next(iter(self._plan_cache))
+                        del self._plan_cache[oldest_key]
+                    self._plan_cache[cache_key] = validated_plan
                     return validated_plan
         except Exception as exc:
             self.logger.warning(f"LLM planning failed, using default plan: {exc}")

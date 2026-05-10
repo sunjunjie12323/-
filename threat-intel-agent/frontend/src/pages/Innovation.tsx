@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Card,
   Tabs,
@@ -554,7 +554,7 @@ const DecayTab: React.FC = () => {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchDecayData = async () => {
+  const fetchDecayData = useCallback(async () => {
     setLoading(true);
     try {
       const [batchRes, recRes] = await Promise.all([
@@ -568,11 +568,11 @@ const DecayTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   React.useEffect(() => {
     fetchDecayData();
-  }, []);
+  }, [fetchDecayData]);
 
   const statusColors: Record<string, string> = {
     fresh: 'green',
@@ -711,7 +711,7 @@ const OrganismTab: React.FC = () => {
   const [lifecycleResult, setLifecycleResult] = useState<any>(null);
   const [accuracy, setAccuracy] = useState<any>(null);
 
-  const fetchOrganisms = async () => {
+  const fetchOrganisms = useCallback(async () => {
     setLoading(true);
     try {
       const [orgRes, geneRes] = await Promise.all([
@@ -725,11 +725,11 @@ const OrganismTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   React.useEffect(() => {
     fetchOrganisms();
-  }, []);
+  }, [fetchOrganisms]);
 
   const handleSpawn = async () => {
     if (!spawnId.trim() || !spawnValue.trim()) {

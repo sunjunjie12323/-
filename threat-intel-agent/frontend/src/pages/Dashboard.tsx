@@ -42,24 +42,24 @@ const Dashboard: React.FC = () => {
   const [taskProgresses, setTaskProgresses] = useState<TaskStatus[]>([]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError(null);
       const data = await dashboardApi.getStats();
       setStats(data);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '获取仪表盘数据失败';
       setError(msg);
-      message.error(msg);
+      if (showLoading) message.error(msg);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 60000);
+    const interval = setInterval(() => fetchStats(false), 60000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 
@@ -113,7 +113,7 @@ const Dashboard: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
         <Empty description={`加载失败: ${error}`}>
-          <a onClick={fetchStats}><ReloadOutlined /> 重新加载</a>
+          <a onClick={() => fetchStats()}><ReloadOutlined /> 重新加载</a>
         </Empty>
       </div>
     );
@@ -194,7 +194,7 @@ const Dashboard: React.FC = () => {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={14}>
-          <Card title="最近情报" extra={<a onClick={fetchStats}><ReloadOutlined style={{ marginRight: 4 }} />刷新</a>} style={{ height: '100%' }}>
+          <Card title="最近情报" extra={<a onClick={() => fetchStats()}><ReloadOutlined style={{ marginRight: 4 }} />刷新</a>} style={{ height: '100%' }}>
             {(!stats?.recent_intelligence || stats.recent_intelligence.length === 0) ? (
               <Empty description="暂无情报数据，点击上方按钮开始采集" />
             ) : (

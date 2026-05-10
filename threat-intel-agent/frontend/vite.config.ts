@@ -21,10 +21,16 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          antd: ['antd', '@ant-design/icons'],
-          g6: ['@antv/g6'],
+        manualChunks(id) {
+          if (['react', 'react-dom', 'react-router-dom'].some((m) => id.includes(m))) {
+            return 'vendor';
+          }
+          if (['antd', '@ant-design/icons'].some((m) => id.includes(m))) {
+            return 'antd';
+          }
+          if (id.includes('@antv/g6')) {
+            return 'g6';
+          }
         },
       },
     },

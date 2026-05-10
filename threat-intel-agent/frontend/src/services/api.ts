@@ -255,8 +255,12 @@ export const graphApi = {
   },
 
   addEntity: async (type: string, value: string, context?: string, confidence?: number): Promise<{ id: string }> => {
-    const { data } = await apiClient.post('/graph/entities', { type, value, context, confidence });
-    return data;
+      const { data } = await apiClient.post('/graph/entities', { type, value, context, confidence });
+      return data;
+    },
+
+  deleteEntity: async (entityId: string): Promise<void> => {
+    await apiClient.delete(`/graph/entities/${entityId}`);
   },
 
   addRelation: async (sourceEntityId: string, targetEntityId: string, type: string, confidence?: number, evidence?: string): Promise<{ id: string }> => {
@@ -458,7 +462,7 @@ export const api = {
     },
   },
   provenance: {
-    record: async (params: any) => {
+    record: async (params: Record<string, unknown>) => {
       const { data } = await apiClient.post('/provenance/record', params);
       return data;
     },

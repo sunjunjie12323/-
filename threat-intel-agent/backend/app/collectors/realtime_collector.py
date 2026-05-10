@@ -1,6 +1,8 @@
 import asyncio
 import aiohttp
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -13,6 +15,8 @@ class RealTimeCollector:
     URLHAUS_RECENT = "https://urlhaus-api.abuse.ch/v1/urls/recent/"
     ALIENVAULT_OTX = "https://otx.alienvault.com/api/v1/pulses/subscribed"
     CISA_FEED = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    CACHE_DIR = "./cache/realtime"
+    CACHE_TTL_SECONDS = 3600
 
     def __init__(self, llm: LLMService):
         self.llm = llm
@@ -63,11 +67,54 @@ class RealTimeCollector:
                 self.logger.warning(f"CISA KEV collection failed: {exc}")
 
         if not items:
+            cached = self._load_cache()
+            if cached:
+                self.logger.info(f"Using cached data: {len(cached)} items")
+                items = cached
+
+        if not items:
             self.logger.warning("All real sources failed, falling back to LLM simulation")
             items = await self._llm_fallback(keywords, max_results)
 
+        if items:
+            self._save_cache(items)
+
         self.logger.info(f"RealTimeCollector: collected {len(items)} items total")
         return items[:max_results]
+
+    def _load_cache(self) -> List[Dict]:
+        cache_path = Path(self.CACHE_DIR) / "latest.json"
+        if not cache_path.exists():
+            return []
+        try:
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
+            cached_at = data.get("cached_at", "")
+            if cached_at:
+                cached_time = datetime.fromisoformat(cached_at)
+                age = (datetime.utcnow() - cached_time).total_seconds()
+                if age > self.CACHE_TTL_SECONDS:
+                    self.logger.info(f"Cache expired ({age:.0f}s old)")
+                    return []
+            return data.get("items", [])
+        except Exception as exc:
+            self.logger.warning(f"Failed to load cache: {exc}")
+            return []
+
+    def _save_cache(self, items: List[Dict]):
+        cache_path = Path(self.CACHE_DIR) / "latest.json"
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "cached_at": datetime.utcnow().isoformat(),
+                "count": len(items),
+                "items": items,
+            }
+            tmp_path = cache_path.with_suffix(".tmp")
+            tmp_path.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
+            tmp_path.replace(cache_path)
+            self.logger.debug(f"Cached {len(items)} items")
+        except Exception as exc:
+            self.logger.warning(f"Failed to save cache: {exc}")
 
     async def _collect_urlhaus(self, max_results: int) -> List[Dict]:
         session = await self._get_session()

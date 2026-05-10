@@ -192,6 +192,13 @@ async def _shutdown_services(app: FastAPI):
     except Exception as exc:
         logger.warning(f"Failed to stop task queue: {exc}")
 
+    if hasattr(app.state, "realtime_collector"):
+        try:
+            await app.state.realtime_collector.close()
+            logger.info("RealTimeCollector session closed")
+        except Exception as exc:
+            logger.warning(f"Failed to close RealTimeCollector: {exc}")
+
     if hasattr(app.state, "knowledge_graph"):
         try:
             await app.state.knowledge_graph.save()
@@ -261,6 +268,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def https_redirect_middleware(request: Request, call_next):
+    if request.url.scheme == "http" and request.headers.get("x-forwarded-proto") == "https":
+        https_url = request.url.replace(scheme="https")
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=str(https_url), status_code=301)
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
 
 
 @app.middleware("http")
