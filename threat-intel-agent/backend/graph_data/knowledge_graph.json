@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "69844e4d366c4638bb0861d80e8b9079": {
+      "id": "69844e4d366c4638bb0861d80e8b9079",
+      "type": "organization",
+      "value": "XX跑分平台",
+      "context": "Telegram群组中发现的跑分洗钱平台",
+      "source_ids": [],
+      "confidence": 0.85,
+      "first_seen": "2026-05-10 04:37:02.536487",
+      "last_seen": "2026-05-10 04:37:02.536491",
+      "metadata": {}
+    },
+    "1aea8f100a0c4323bc6e5c846d313c8d": {
+      "id": "1aea8f100a0c4323bc6e5c846d313c8d",
+      "type": "tool",
+      "value": "猫池设备",
+      "context": "批量收发短信验证码的设备",
+      "source_ids": [],
+      "confidence": 0.9,
+      "first_seen": "2026-05-10 04:37:03.011026",
+      "last_seen": "2026-05-10 04:37:03.011036",
+      "metadata": {}
+    }
+  },
+  "relations": {
+    "2a97671e255d4043b0bc7e37b3d0b592": {
+      "id": "2a97671e255d4043b0bc7e37b3d0b592",
+      "source_entity_id": "69844e4d366c4638bb0861d80e8b9079",
+      "target_entity_id": "1aea8f100a0c4323bc6e5c846d313c8d",
+      "type": "uses",
+      "confidence": 0.8,
+      "evidence": "跑分平台使用猫池设备接收验证码",
+      "first_seen": "2026-05-10 04:37:22.645898",
+      "last_seen": "2026-05-10 04:37:22.645913"
+    }
+  },
+  "nodes": {
+    "69844e4d366c4638bb0861d80e8b9079": {
+      "type": "organization",
+      "value": "XX跑分平台",
+      "confidence": 0.85,
+      "context": "Telegram群组中发现的跑分洗钱平台"
+    },
+    "1aea8f100a0c4323bc6e5c846d313c8d": {
+      "type": "tool",
+      "value": "猫池设备",
+      "confidence": 0.9,
+      "context": "批量收发短信验证码的设备"
+    }
+  },
+  "edges": [
+    {
+      "source": "69844e4d366c4638bb0861d80e8b9079",
+      "target": "1aea8f100a0c4323bc6e5c846d313c8d",
+      "id": "2a97671e255d4043b0bc7e37b3d0b592",
+      "type": "uses",
+      "confidence": 0.8,
+      "evidence": "跑分平台使用猫池设备接收验证码"
+    }
+  ],
+  "statistics": {
+    "node_count": 2,
+    "edge_count": 1
+  }
+}
