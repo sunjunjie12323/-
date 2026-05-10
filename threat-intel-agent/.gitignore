@@ -1,0 +1,13 @@
+.env
+.secret_key
+__pycache__/
+*.pyc
+venv/
+node_modules/
+chroma_data/
+graph_data/
+organism_data/
+*.db
+*.tmp
+dist/
+.DS_Store

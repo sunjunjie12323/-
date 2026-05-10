@@ -121,16 +121,19 @@ async def _initialize_services(app: FastAPI):
     from app.collectors.forum_collector import ForumCollector
     from app.collectors.wechat_collector import WeChatCollector
     from app.collectors.darkweb_collector import DarkWebCollector
+    from app.collectors.realtime_collector import RealTimeCollector
 
     telegram_collector = TelegramCollector(llm=llm)
     forum_collector = ForumCollector(llm=llm)
     wechat_collector = WeChatCollector(llm=llm)
     darkweb_collector = DarkWebCollector(llm=llm)
+    realtime_collector = RealTimeCollector(llm=llm)
 
     app.state.telegram_collector = telegram_collector
     app.state.forum_collector = forum_collector
     app.state.wechat_collector = wechat_collector
     app.state.darkweb_collector = darkweb_collector
+    app.state.realtime_collector = realtime_collector
     logger.info("All collectors created")
 
     logger.info("[10/17] Registering collectors with CollectorAgent...")
@@ -138,6 +141,7 @@ async def _initialize_services(app: FastAPI):
     orchestrator.collector.register_collector("forum", forum_collector.collect)
     orchestrator.collector.register_collector("wechat", wechat_collector.collect)
     orchestrator.collector.register_collector("darkweb", darkweb_collector.collect)
+    orchestrator.collector.register_collector("realtime", realtime_collector.collect)
     logger.info("All collectors registered")
 
     logger.info("[11/17] Registering task queue handlers and starting workers...")
@@ -194,6 +198,13 @@ async def _shutdown_services(app: FastAPI):
             logger.info("KnowledgeGraph saved")
         except Exception as exc:
             logger.warning(f"Failed to save KnowledgeGraph: {exc}")
+
+    if hasattr(app.state, "intelligence_organism"):
+        try:
+            await app.state.intelligence_organism.save_to_disk()
+            logger.info("IntelligenceOrganism data saved")
+        except Exception as exc:
+            logger.warning(f"Failed to save IntelligenceOrganism data: {exc}")
 
     if hasattr(app.state, "vector_store"):
         try:

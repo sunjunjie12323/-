@@ -1,4 +1,5 @@
 import json
+import secrets
 from pathlib import Path
 from typing import List
 
@@ -25,9 +26,9 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
-    CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:3001","http://localhost:3002","http://localhost:5173"]'
+    CORS_ORIGINS: str = '["http://localhost:5173"]'
 
-    SECRET_KEY: str = "change-me-in-production-use-a-strong-random-key"
+    SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     ALGORITHM: str = "HS256"
 
@@ -37,11 +38,22 @@ class Settings(BaseSettings):
     DEFAULT_ADMIN_PASSWORD: str = "admin123"
 
     @property
+    def secret_key_resolved(self) -> str:
+        if self.SECRET_KEY and self.SECRET_KEY != "change-me-in-production-use-a-strong-random-key":
+            return self.SECRET_KEY
+        key_file = Path(__file__).resolve().parent.parent / ".secret_key"
+        if key_file.exists():
+            return key_file.read_text().strip()
+        generated = secrets.token_urlsafe(48)
+        key_file.write_text(generated)
+        return generated
+
+    @property
     def cors_origins_list(self) -> List[str]:
         try:
             return json.loads(self.CORS_ORIGINS)
         except (json.JSONDecodeError, TypeError):
-            return ["http://localhost:3000", "http://localhost:5173"]
+            return ["http://localhost:5173"]
 
 
 settings = Settings()

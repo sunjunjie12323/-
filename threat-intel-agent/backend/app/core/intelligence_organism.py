@@ -1,7 +1,10 @@
+import json
 import math
+import os
 from collections import deque
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -192,13 +195,66 @@ class CalibrationResult:
 
 
 class IntelligenceOrganismEngine:
-    def __init__(self, llm: LLMService, vector_store: VectorStore, knowledge_graph: KnowledgeGraph):
+    PERSIST_DIR = "./organism_data"
+    PERSIST_FILE = "organism_state.json"
+    AUTO_SAVE_INTERVAL_SECONDS = 60
+
+    def __init__(self, llm: LLMService, vector_store: VectorStore, knowledge_graph: KnowledgeGraph, persist_dir: str = None):
         self.llm = llm
         self.vector_store = vector_store
         self.knowledge_graph = knowledge_graph
+        self.persist_dir = persist_dir or self.PERSIST_DIR
         self.organisms: Dict[str, IntelligenceOrganism] = {}
         self.prediction_trackers: Dict[str, PredictionTracker] = {}
         self.genes: Dict[str, IntelligenceGene] = {}
+        self._load_from_disk()
+
+    def _load_from_disk(self):
+        persist_path = Path(self.persist_dir) / self.PERSIST_FILE
+        if not persist_path.exists():
+            logger.info("No persisted organism data found, starting fresh")
+            return
+        try:
+            with open(persist_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+
+            for oid, odata in raw.get("organisms", {}).items():
+                odata["evolution_log"] = [EvolutionEvent(**ev) for ev in odata.get("evolution_log", [])]
+                self.organisms[oid] = IntelligenceOrganism(**odata)
+
+            for pid, pdata in raw.get("prediction_trackers", {}).items():
+                pdata["validations"] = [ValidationResult(**v) for v in pdata.get("validations", [])]
+                self.prediction_trackers[pid] = PredictionTracker(**pdata)
+
+            for gid, gdata in raw.get("genes", {}).items():
+                self.genes[gid] = IntelligenceGene(**gdata)
+
+            logger.info(
+                f"Loaded organism data from disk: {len(self.organisms)} organisms, "
+                f"{len(self.prediction_trackers)} trackers, {len(self.genes)} genes"
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to load organism data from disk: {exc}, starting fresh")
+
+    async def save_to_disk(self):
+        persist_dir = Path(self.persist_dir)
+        persist_dir.mkdir(parents=True, exist_ok=True)
+        persist_path = persist_dir / self.PERSIST_FILE
+
+        try:
+            data = {
+                "organisms": {oid: o.to_dict() for oid, o in self.organisms.items()},
+                "prediction_trackers": {pid: p.to_dict() for pid, p in self.prediction_trackers.items()},
+                "genes": {gid: g.to_dict() for gid, g in self.genes.items()},
+                "saved_at": datetime.utcnow().isoformat(),
+            }
+            tmp_path = persist_path.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, default=str)
+            tmp_path.replace(persist_path)
+            logger.debug(f"Organism data saved to disk ({len(self.organisms)} organisms, {len(self.genes)} genes)")
+        except Exception as exc:
+            logger.error(f"Failed to save organism data to disk: {exc}")
 
     async def spawn_organism(
         self, intelligence_id: str, species: str, initial_data: Dict
@@ -266,6 +322,7 @@ class IntelligenceOrganismEngine:
             f"Spawned organism {intelligence_id} (species={species}, "
             f"generation={organism.generation}, vitality={organism.vitality:.2f})"
         )
+        await self.save_to_disk()
         return organism
 
     async def evolve(
@@ -330,6 +387,7 @@ class IntelligenceOrganismEngine:
             f"Evolved organism {organism_id}: vitality={organism.vitality:.3f}, "
             f"mutated={has_significant_change}, trigger={trigger}"
         )
+        await self.save_to_disk()
         return organism
 
     async def check_vitality(self, organism_id: str) -> VitalityReport:
@@ -730,6 +788,7 @@ class IntelligenceOrganismEngine:
             f"Archived organism {organism_id}, preserved gene {gene.gene_id} "
             f"({len(patterns)} patterns, {len(associations)} associations)"
         )
+        await self.save_to_disk()
         return gene
 
     async def inherit_genes(self, new_organism_id: str, parent_genes: List[str]) -> Dict:
@@ -921,6 +980,7 @@ class IntelligenceOrganismEngine:
                 logger.warning(f"Rebirth check failed for organism {organism_id}: {exc}")
 
         logger.info(f"Lifecycle check complete: {results}")
+        await self.save_to_disk()
         return results
 
     def _detect_significant_change(self, before: Dict, after: Dict) -> bool:

@@ -48,6 +48,14 @@ class IntelligenceCRUD:
         self.session = session
 
     async def create_raw(self, data: RawIntelligence) -> RawIntelligence:
+        if data.content:
+            dup_stmt = select(RawIntelligenceTable).where(
+                RawIntelligenceTable.content == data.content
+            ).limit(1)
+            dup_result = await self.session.execute(dup_stmt)
+            if dup_result.scalar_one_or_none() is not None:
+                return None
+
         row = RawIntelligenceTable(
             id=data.id,
             source=data.source.value,
@@ -271,6 +279,16 @@ class EntityCRUD:
         self.session = session
 
     async def create_entity(self, data: Entity) -> Entity:
+        if data.value:
+            dup_stmt = select(EntityTable).where(
+                EntityTable.value == data.value,
+                EntityTable.type == data.type.value,
+            ).limit(1)
+            dup_result = await self.session.execute(dup_stmt)
+            existing = dup_result.scalar_one_or_none()
+            if existing is not None:
+                return self._entity_row_to_model(existing)
+
         row = EntityTable(
             id=data.id,
             type=data.type.value,

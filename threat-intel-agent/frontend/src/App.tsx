@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import Dashboard from './pages/Dashboard';
 import Intelligence from './pages/Intelligence';
 import GraphView from './pages/GraphView';
@@ -52,6 +53,7 @@ const App: React.FC = () => {
       }}
     >
       <BrowserRouter>
+        <ErrorBoundary>
         <Routes>
           <Route
             path="/login"
@@ -127,6 +129,7 @@ const App: React.FC = () => {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </ConfigProvider>
   );

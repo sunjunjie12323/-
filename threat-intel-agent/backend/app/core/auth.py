@@ -90,12 +90,12 @@ def create_access_token(user: User) -> str:
         "iat": datetime.utcnow(),
         "jti": uuid4().hex,
     }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return jwt.encode(payload, settings.secret_key_resolved, algorithm=settings.ALGORITHM)
 
 
 def decode_access_token(token: str) -> TokenData:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.secret_key_resolved, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
             raise UnauthorizedException(detail="无效令牌: 缺少用户标识")
@@ -113,7 +113,7 @@ def decode_access_token(token: str) -> TokenData:
 
 def blacklist_token(token: str) -> None:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.secret_key_resolved, algorithms=[settings.ALGORITHM])
         exp = payload.get("exp", 0)
     except JWTError:
         exp = time.time() + 3600
