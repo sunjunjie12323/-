@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     DEFAULT_ADMIN_USERNAME: str = "admin"
     DEFAULT_ADMIN_PASSWORD: str = "admin123"
 
+    TELEGRAM_BOT_TOKEN: str = ""
+    ALIENVAULT_OTX_KEY: str = ""
+    VIRUSTOTAL_API_KEY: str = ""
+    ABUSEIPDB_API_KEY: str = ""
+
     @property
     def secret_key_resolved(self) -> str:
         if self.SECRET_KEY and self.SECRET_KEY != "change-me-in-production-use-a-strong-random-key":

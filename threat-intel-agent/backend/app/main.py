@@ -199,6 +199,15 @@ async def _shutdown_services(app: FastAPI):
         except Exception as exc:
             logger.warning(f"Failed to close RealTimeCollector: {exc}")
 
+    for name in ("telegram_collector", "forum_collector", "wechat_collector", "darkweb_collector"):
+        collector = getattr(app.state, name, None)
+        if collector and hasattr(collector, "close"):
+            try:
+                await collector.close()
+                logger.info(f"{name} session closed")
+            except Exception as exc:
+                logger.warning(f"Failed to close {name}: {exc}")
+
     if hasattr(app.state, "knowledge_graph"):
         try:
             await app.state.knowledge_graph.save()

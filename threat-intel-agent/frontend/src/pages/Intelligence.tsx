@@ -170,10 +170,14 @@ const Intelligence: React.FC = () => {
         const colorMap: Record<string, string> = {
           seed: 'orange',
           llm_simulated: 'gold',
+          llm_analysis: 'gold',
           urlhaus: 'green',
-          alienvault: 'cyan',
-          cisa: 'blue',
-          telegram: 'purple',
+          alienvault_otx: 'cyan',
+          phishtank: 'lime',
+          cisa_kev: 'blue',
+          hibp: 'purple',
+          sogou_wechat: 'green',
+          telegram: 'geekblue',
           forum: 'geekblue',
           wechat: 'green',
           darkweb: 'red',
@@ -181,6 +185,13 @@ const Intelligence: React.FC = () => {
         const labelMap: Record<string, string> = {
           seed: '种子数据',
           llm_simulated: 'AI模拟',
+          llm_analysis: 'AI分析',
+          urlhaus: 'URLhaus',
+          alienvault_otx: 'AlienVault',
+          phishtank: 'PhishTank',
+          cisa_kev: 'CISA',
+          hibp: 'HIBP',
+          sogou_wechat: '搜狗微信',
         };
         return <Tag color={colorMap[source] || 'default'}>{labelMap[source] || source}</Tag>;
       },

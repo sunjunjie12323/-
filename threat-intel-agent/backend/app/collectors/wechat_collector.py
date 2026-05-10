@@ -1,16 +1,37 @@
-from datetime import datetime
+import aiohttp
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
 
 from loguru import logger
 
 from app.core.llm import LLMService
+from app.config import settings
 
 
 class WeChatCollector:
+    SOGOU_WECHAT = "https://weixin.sogou.com/weixin"
+    SOGOU_ARTICLE = "https://weixin.sogou.com/article"
+
     def __init__(self, llm: LLMService):
         self.llm = llm
         self.logger = logger.bind(collector="wechat")
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            timeout = aiohttp.ClientTimeout(total=30)
+            self._session = aiohttp.ClientSession(
+                timeout=timeout,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                },
+            )
+        return self._session
+
+    async def close(self):
+        if self._session and not self._session.closed:
+            await self._session.close()
 
     async def collect(
         self,
@@ -19,25 +40,69 @@ class WeChatCollector:
         time_range: Optional[Dict] = None,
         **kwargs: Any,
     ) -> List[Dict]:
-        self.logger.info(
-            f"Collecting from WeChat: keywords={keywords}, max_results={max_results}"
-        )
+        self.logger.info(f"Collecting from WeChat: keywords={keywords}, max_results={max_results}")
 
+        items = await self._collect_sogou(keywords, max_results)
+        if items:
+            return items
+
+        self.logger.warning("Sogou WeChat search failed, falling back to LLM analysis")
+        return await self._llm_analyze(keywords, max_results)
+
+    async def _collect_sogou(self, keywords: List[str], max_results: int) -> List[Dict]:
+        session = await self._get_session()
+        items: List[Dict] = []
+
+        try:
+            search_kw = " ".join(keywords) if keywords else "黑灰产 反诈"
+            async with session.get(
+                self.SOGOU_WECHAT,
+                params={"type": "2", "query": search_kw, "s_from": "input"},
+            ) as resp:
+                if resp.status != 200:
+                    self.logger.warning(f"Sogou WeChat returned {resp.status}")
+                    return items
+
+                text = await resp.text()
+                import re
+                title_pattern = re.compile(r'<a[^>]*href="([^"]*)"[^>]*>([^<]+)</a>', re.IGNORECASE)
+                matches = title_pattern.findall(text)
+
+                for href, title in matches[:max_results]:
+                    title = title.strip()
+                    if not title or len(title) < 4:
+                        continue
+
+                    clean_title = re.sub(r'<[^>]+>', '', title)
+                    if any(skip in clean_title for skip in ['登录', '注册', '搜狗', '微信']):
+                        continue
+
+                    items.append({
+                        "content": f"[微信公众号] {clean_title}",
+                        "source_url": href if href.startswith("http") else f"https://weixin.sogou.com{href}",
+                        "metadata": {
+                            "source": "sogou_wechat",
+                            "title": clean_title,
+                            "search_keyword": search_kw,
+                            "collected_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    })
+        except Exception as exc:
+            self.logger.warning(f"Sogou WeChat collection failed: {exc}")
+
+        return items
+
+    async def _llm_analyze(self, keywords: List[str], max_results: int) -> List[Dict]:
         system_prompt = (
-            "你是一个黑灰产情报模拟采集专家。模拟从微信群/QQ群中采集到的黑灰产相关情报。\n\n"
+            "你是一个黑灰产情报分析专家。基于给定的关键词，分析当前可能存在的黑灰产威胁趋势。\n\n"
             "返回JSON数组，每个元素包含：\n"
-            "- content: 情报内容（包含黑话、暗语等真实特征，模拟群聊消息风格）\n"
-            "- source_url: 来源URL（留空即可）\n"
-            "- metadata: 元数据对象，必须包含source='llm_simulated'、group_name、sender、message_type、collected_at等字段\n\n"
-            "生成2-5条模拟情报。只返回JSON数组，不要其他内容。"
+            "- content: 基于关键词推断的可能威胁情报内容\n"
+            "- source_url: 留空字符串\n"
+            "- metadata: 元数据对象，必须包含source='llm_analysis'、analysis_type='keyword_inference'、collected_at等字段\n\n"
+            "生成2-5条分析结果。只返回JSON数组。"
         )
         keyword_str = "、".join(keywords) if keywords else "黑灰产"
-        prompt = (
-            f"来源：微信群/QQ群\n"
-            f"关键词：{keyword_str}\n"
-            f"最多条数：{min(max_results, 5)}\n\n"
-            f"请模拟从微信群采集到的情报数据。"
-        )
+        prompt = f"关键词：{keyword_str}\n请基于这些关键词分析可能的微信/社交媒体黑灰产威胁情报。"
 
         try:
             result = await self.llm.generate_json(
@@ -51,25 +116,20 @@ class WeChatCollector:
                     if isinstance(item, dict):
                         item.setdefault("source_url", "")
                         item.setdefault("metadata", {
-                            "source": "llm_simulated",
-                            "group_name": "simulated_group",
-                            "sender": "unknown",
-                            "message_type": "text",
-                            "collected_at": datetime.utcnow().isoformat(),
+                            "source": "llm_analysis",
+                            "analysis_type": "keyword_inference",
+                            "collected_at": datetime.now(timezone.utc).isoformat(),
                         })
                         items.append(item)
             elif isinstance(result, dict):
                 result.setdefault("source_url", "")
                 result.setdefault("metadata", {
-                    "source": "llm_simulated",
-                    "group_name": "simulated_group",
-                    "sender": "unknown",
-                    "message_type": "text",
-                    "collected_at": datetime.utcnow().isoformat(),
+                    "source": "llm_analysis",
+                    "analysis_type": "keyword_inference",
+                    "collected_at": datetime.now(timezone.utc).isoformat(),
                 })
                 items.append(result)
-            self.logger.info(f"Collected {len(items)} items from WeChat")
             return items
         except Exception as exc:
-            self.logger.error(f"WeChat collection failed: {exc}")
+            self.logger.error(f"WeChat LLM analysis failed: {exc}")
             return []
