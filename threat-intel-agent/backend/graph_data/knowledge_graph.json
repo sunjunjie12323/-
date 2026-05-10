@@ -923,6 +923,17 @@
       "first_seen": "2026-05-10 07:31:21.627136",
       "last_seen": "2026-05-10 07:31:21.627138",
       "metadata": {}
+    },
+    "0a9b77c1f9e9407cae0215f94a7ec664": {
+      "id": "0a9b77c1f9e9407cae0215f94a7ec664",
+      "type": "phone",
+      "value": "13900139000",
+      "context": "e2e test",
+      "source_ids": [],
+      "confidence": 0.5,
+      "first_seen": "2026-05-10 08:15:28.831005",
+      "last_seen": "2026-05-10 08:15:28.831010",
+      "metadata": {}
     }
   },
   "relations": {
@@ -2031,6 +2042,12 @@
       "value": "13900139000",
       "confidence": 0.5,
       "context": "e2e test"
+    },
+    "0a9b77c1f9e9407cae0215f94a7ec664": {
+      "type": "phone",
+      "value": "13900139000",
+      "confidence": 0.5,
+      "context": "e2e test"
     }
   },
   "edges": [
@@ -2516,7 +2533,7 @@
     }
   ],
   "statistics": {
-    "node_count": 84,
+    "node_count": 85,
     "edge_count": 60
   }
 }

@@ -236,6 +236,7 @@ class IntelligenceCRUD:
             raw_content=row.raw_content,
             collected_at=row.collected_at,
             metadata=_json_loads(row.metadata_json, {}),
+            status=IntelligenceStatus(row.status) if row.status else IntelligenceStatus.RAW,
         )
 
     def _cleaned_row_to_model(self, row: CleanedIntelligenceTable) -> CleanedIntelligence:

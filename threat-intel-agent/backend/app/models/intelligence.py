@@ -43,6 +43,7 @@ class RawIntelligence(BaseModel):
     raw_content: Optional[str] = None
     collected_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    status: IntelligenceStatus = IntelligenceStatus.RAW
 
 
 class CleanedIntelligence(BaseModel):
