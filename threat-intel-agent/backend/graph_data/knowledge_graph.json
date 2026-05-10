@@ -890,6 +890,39 @@
       "first_seen": "2026-05-10 06:32:29.047425",
       "last_seen": "2026-05-10 06:32:29.047428",
       "metadata": {}
+    },
+    "aead35164ec24faba7ed1377dc5a8ffc": {
+      "id": "aead35164ec24faba7ed1377dc5a8ffc",
+      "type": "phone",
+      "value": "13900139000",
+      "context": "e2e test",
+      "source_ids": [],
+      "confidence": 0.5,
+      "first_seen": "2026-05-10 07:15:15.368119",
+      "last_seen": "2026-05-10 07:15:15.368121",
+      "metadata": {}
+    },
+    "dd02efb94bff4b87ace9de3b6f1d3aef": {
+      "id": "dd02efb94bff4b87ace9de3b6f1d3aef",
+      "type": "phone",
+      "value": "13900139000",
+      "context": "e2e test",
+      "source_ids": [],
+      "confidence": 0.5,
+      "first_seen": "2026-05-10 07:24:08.637805",
+      "last_seen": "2026-05-10 07:24:08.637807",
+      "metadata": {}
+    },
+    "f91a4da8eac84a5aaea74f370ef9b13a": {
+      "id": "f91a4da8eac84a5aaea74f370ef9b13a",
+      "type": "phone",
+      "value": "13900139000",
+      "context": "e2e test",
+      "source_ids": [],
+      "confidence": 0.5,
+      "first_seen": "2026-05-10 07:31:21.627136",
+      "last_seen": "2026-05-10 07:31:21.627138",
+      "metadata": {}
     }
   },
   "relations": {
@@ -1980,6 +2013,24 @@
       "value": "1.2.3.4",
       "confidence": 0.5,
       "context": "t"
+    },
+    "aead35164ec24faba7ed1377dc5a8ffc": {
+      "type": "phone",
+      "value": "13900139000",
+      "confidence": 0.5,
+      "context": "e2e test"
+    },
+    "dd02efb94bff4b87ace9de3b6f1d3aef": {
+      "type": "phone",
+      "value": "13900139000",
+      "confidence": 0.5,
+      "context": "e2e test"
+    },
+    "f91a4da8eac84a5aaea74f370ef9b13a": {
+      "type": "phone",
+      "value": "13900139000",
+      "confidence": 0.5,
+      "context": "e2e test"
     }
   },
   "edges": [
@@ -2465,7 +2516,7 @@
     }
   ],
   "statistics": {
-    "node_count": 81,
+    "node_count": 84,
     "edge_count": 60
   }
 }

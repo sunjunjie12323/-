@@ -46,7 +46,21 @@ class TokenData(BaseModel):
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security_scheme = HTTPBearer()
+
+
+class HTTPBearer401(HTTPBearer):
+    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
+        try:
+            return await super().__call__(request)
+        except Exception:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=401,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+security_scheme = HTTPBearer401()
 
 _users_db: Dict[str, User] = {}
 _token_blacklist: Dict[str, float] = {}

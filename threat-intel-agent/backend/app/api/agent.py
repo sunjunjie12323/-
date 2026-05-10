@@ -28,27 +28,16 @@ def get_orchestrator(request: Request):
 @router.post("/query")
 async def submit_query(
     data: QueryRequest,
-    request: Request,
     current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
-    orchestrator = get_orchestrator(request)
+    from app.core.task_queue import task_queue
     try:
-        result = await orchestrator.execute_query(
-            query=data.query,
-            context=data.context,
+        task_id = await task_queue.submit(
+            task_type="query",
+            params={"query": data.query, "context": data.context},
         )
-        if isinstance(result, dict):
-            task_id = result.get("task_id", result.get("execution_id", ""))
-            return {
-                "task_id": task_id,
-                "status": result.get("status", "completed"),
-                "message": result.get("message", "查询已提交"),
-                "execution_id": result.get("execution_id", task_id),
-                "results": result.get("results"),
-                "results_summary": result.get("results_summary"),
-            }
         return {
-            "task_id": str(result),
+            "task_id": task_id,
             "status": "pending",
             "message": "查询已提交",
         }
@@ -111,16 +100,14 @@ async def get_execution_detail(
 
 @router.post("/collect")
 async def trigger_collection(
-    request: Request,
     current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
-    orchestrator = get_orchestrator(request)
+    from app.core.task_queue import task_queue
     try:
-        result = await orchestrator.execute_query(
-            query="执行情报收集任务",
-            context={"agent_type": "collector"},
+        task_id = await task_queue.submit(
+            task_type="collect",
+            params={"source": "all", "keywords": [], "max_results": 10},
         )
-        task_id = result.get("task_id", result.get("execution_id", "")) if isinstance(result, dict) else str(result)
         return {"task_id": task_id, "status": "pending", "message": "情报收集任务已提交"}
     except Exception as exc:
         logger.error(f"Failed to trigger collection: {exc}")
@@ -129,16 +116,14 @@ async def trigger_collection(
 
 @router.post("/analyze")
 async def trigger_analysis(
-    request: Request,
     current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
-    orchestrator = get_orchestrator(request)
+    from app.core.task_queue import task_queue
     try:
-        result = await orchestrator.execute_query(
-            query="执行情报分析任务",
-            context={"agent_type": "analyst"},
+        task_id = await task_queue.submit(
+            task_type="analyze",
+            params={"cleaned_intelligence": {}},
         )
-        task_id = result.get("task_id", result.get("execution_id", "")) if isinstance(result, dict) else str(result)
         return {"task_id": task_id, "status": "pending", "message": "情报分析任务已提交"}
     except Exception as exc:
         logger.error(f"Failed to trigger analysis: {exc}")

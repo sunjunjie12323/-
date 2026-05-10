@@ -44,19 +44,18 @@ async def generate_report(
 
     task_id = ""
     try:
-        orchestrator = request.app.state.orchestrator
-        task_result = await orchestrator.process_query(
-            query=f"生成报告: {data.title}",
-            context={
-                "report_id": result.id,
-                "pir_ids": data.pir_ids,
-                "intelligence_ids": data.intelligence_ids,
+        from app.core.task_queue import task_queue
+        task_id = await task_queue.submit(
+            task_type="query",
+            params={
+                "query": f"生成报告: {data.title}",
+                "context": {
+                    "report_id": result.id,
+                    "pir_ids": data.pir_ids,
+                    "intelligence_ids": data.intelligence_ids,
+                },
             },
         )
-        if isinstance(task_result, dict):
-            task_id = task_result.get("task_id", task_result.get("execution_id", ""))
-        else:
-            task_id = str(task_result)
     except Exception as exc:
         logger.warning(f"Failed to trigger report generation task: {exc}")
 

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -88,13 +89,38 @@ async def add_term(
 ):
     engine = get_blacktalk_engine(request)
     try:
-        bt = await engine.learn(
-            term=data.term,
-            meaning=data.meaning,
-            context=data.context,
-            source=data.source,
+        bt = await asyncio.wait_for(
+            engine.learn(
+                term=data.term,
+                meaning=data.meaning,
+                context=data.context,
+                source=data.source,
+            ),
+            timeout=10.0,
         )
         return bt.to_dict()
+    except asyncio.TimeoutError:
+        bt_obj = None
+        existing_id = engine._term_index.get(data.term)
+        if existing_id and existing_id in engine._dictionary:
+            bt_obj = engine._dictionary[existing_id]
+        else:
+            from uuid import uuid4
+            from datetime import datetime
+            from app.core.blacktalk_engine import BlackTalkTerm
+            term_id = uuid4().hex
+            bt_obj = BlackTalkTerm(
+                id=term_id,
+                term=data.term,
+                meaning=data.meaning,
+                category=engine._infer_category(data.meaning),
+                context_examples=[data.context] if data.context else [],
+                confidence=1.0 if data.source == "manual" else 0.5,
+                source=data.source,
+            )
+            engine._dictionary[term_id] = bt_obj
+            engine._term_index[data.term] = term_id
+        return bt_obj.to_dict()
     except Exception as exc:
         logger.error(f"Failed to add blacktalk term: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -159,15 +185,29 @@ async def search_blacktalk(
 ):
     engine = get_blacktalk_engine(request)
     try:
-        terms = await engine.search(query=q, n=n)
+        terms = await asyncio.wait_for(engine.search(query=q, n=n), timeout=10.0)
         return {
             "query": q,
             "results": [t.to_dict() for t in terms],
             "total": len(terms),
         }
+    except asyncio.TimeoutError:
+        logger.warning("Blacktalk vector search timed out, falling back to dictionary search")
     except Exception as exc:
-        logger.error(f"Blacktalk search failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.warning(f"Blacktalk search failed, falling back to dictionary: {exc}")
+
+    q_lower = q.lower()
+    fallback_results = []
+    for bt in engine._dictionary.values():
+        if q_lower in bt.term.lower() or q_lower in bt.meaning.lower():
+            fallback_results.append(bt)
+        if len(fallback_results) >= n:
+            break
+    return {
+        "query": q,
+        "results": [t.to_dict() for t in fallback_results],
+        "total": len(fallback_results),
+    }
 
 
 @router.get("/stats")
