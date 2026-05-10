@@ -19,6 +19,8 @@ import {
   Descriptions,
   Divider,
   Checkbox,
+  Alert,
+  Skeleton,
 } from 'antd';
 import {
   SearchOutlined,
@@ -26,11 +28,10 @@ import {
   ExperimentOutlined,
   ClearOutlined,
   ReloadOutlined,
-  FilterOutlined,
 } from '@ant-design/icons';
 import IntelCard from '../components/IntelCard';
-import { intelligenceApi } from '../services/api';
-import type { Intelligence, PaginatedResponse } from '../types';
+import { intelligenceApi, extractErrorMessage } from '../services/api';
+import type { Intelligence } from '../types';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -53,8 +54,25 @@ const threatLevelOptions = [
   { label: '信息', value: 'info' },
 ];
 
+const sourceTypeLabels: Record<string, string> = {
+  telegram: 'Telegram',
+  dark_web: '暗网',
+  forum: '论坛',
+  social_media: '社交媒体',
+  other: '其他',
+};
+
+const threatLevelLabels: Record<string, string> = {
+  critical: '严重',
+  high: '高危',
+  medium: '中危',
+  low: '低危',
+  info: '信息',
+};
+
 const IntelligencePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [intelligences, setIntelligences] = useState<Intelligence[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -65,12 +83,15 @@ const IntelligencePage: React.FC = () => {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [selectedIntel, setSelectedIntel] = useState<Intelligence | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [collectVisible, setCollectVisible] = useState(false);
+  const [collectLoading, setCollectLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [collectForm] = Form.useForm();
 
   const fetchIntelligences = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await intelligenceApi.getIntelligences({
         query: searchQuery || undefined,
@@ -83,35 +104,10 @@ const IntelligencePage: React.FC = () => {
       });
       setIntelligences(result.items);
       setTotal(result.total);
-    } catch {
-      const mockData: Intelligence[] = Array.from({ length: pageSize }, (_, i) => ({
-        id: `intel-${(page - 1) * pageSize + i + 1}`,
-        title: [
-          '暗网论坛出现新型钓鱼工具包售卖信息',
-          'Telegram群组传播公民个人信息数据集',
-          '发现仿冒银行APP的安卓恶意软件',
-          '某黑产团伙使用新型洗钱通道',
-          '论坛出现新型DDoS攻击服务广告',
-          '检测到大规模凭证填充攻击',
-          '暗网市场出售企业内网访问权限',
-          '新型勒索软件针对医疗行业',
-          '社交媒体传播虚假投资平台',
-          '黑产团伙利用AI生成钓鱼页面',
-        ][i % 10],
-        content: '这是情报的详细内容描述，包含关键信息和上下文分析。该情报经过多源验证，具有较高可信度。',
-        source: ['暗网论坛', 'Telegram', '黑客论坛', '社交媒体'][i % 4],
-        source_type: (['telegram', 'dark_web', 'forum', 'social_media'] as const)[i % 4],
-        threat_level: (['critical', 'high', 'medium', 'low', 'info'] as const)[i % 5],
-        collected_at: dayjs().subtract(i + 1, 'hour').toISOString(),
-        is_processed: i % 3 !== 0,
-        entities: [
-          { id: `e-${i}-1`, name: `实体${i + 1}-A`, entity_type: 'person', properties: {}, confidence: 0.9, first_seen: '', last_seen: '', mention_count: 1 },
-          { id: `e-${i}-2`, name: `实体${i + 1}-B`, entity_type: 'organization', properties: {}, confidence: 0.8, first_seen: '', last_seen: '', mention_count: 1 },
-        ],
-        tags: [['钓鱼'], ['数据泄露'], ['恶意软件'], ['洗钱'], ['DDoS']][i % 5],
-      })) as Intelligence[];
-      setIntelligences(mockData);
-      setTotal(128);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setIntelligences([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -127,21 +123,25 @@ const IntelligencePage: React.FC = () => {
   };
 
   const handleViewDetail = async (intel: Intelligence) => {
+    setDetailLoading(true);
+    setDetailVisible(true);
     try {
       const detail = await intelligenceApi.getIntelDetail(intel.id);
       setSelectedIntel(detail);
-    } catch {
+    } catch (err) {
+      message.warning('详情加载失败，显示基本信息');
       setSelectedIntel(intel);
+    } finally {
+      setDetailLoading(false);
     }
-    setDetailVisible(true);
   };
 
   const handleAnalyze = async (intel: Intelligence) => {
     try {
       await intelligenceApi.batchAnalyze([intel.id]);
       message.success('已提交分析任务');
-    } catch {
-      message.success('已提交分析任务');
+    } catch (err) {
+      message.error(`提交失败: ${extractErrorMessage(err)}`);
     }
   };
 
@@ -149,17 +149,18 @@ const IntelligencePage: React.FC = () => {
     message.info(`已将情报 ${intel.title} 加入图谱分析队列`);
   };
 
-  const handleCollect = async (values: any) => {
+  const handleCollect = async (values: Record<string, unknown>) => {
+    setCollectLoading(true);
     try {
-      await intelligenceApi.createIntel(values);
+      await intelligenceApi.createIntel(values as Partial<Intelligence>);
       message.success('情报采集任务已创建');
       setCollectVisible(false);
       collectForm.resetFields();
       fetchIntelligences();
-    } catch {
-      message.success('情报采集任务已创建');
-      setCollectVisible(false);
-      collectForm.resetFields();
+    } catch (err) {
+      message.error(`创建失败: ${extractErrorMessage(err)}`);
+    } finally {
+      setCollectLoading(false);
     }
   };
 
@@ -172,9 +173,8 @@ const IntelligencePage: React.FC = () => {
       await intelligenceApi.batchAnalyze(selectedIds);
       message.success(`已提交 ${selectedIds.length} 条情报的分析任务`);
       setSelectedIds([]);
-    } catch {
-      message.success(`已提交 ${selectedIds.length} 条情报的分析任务`);
-      setSelectedIds([]);
+    } catch (err) {
+      message.error(`批量分析失败: ${extractErrorMessage(err)}`);
     }
   };
 
@@ -187,9 +187,8 @@ const IntelligencePage: React.FC = () => {
       await intelligenceApi.batchClean(selectedIds);
       message.success(`已提交 ${selectedIds.length} 条情报的清洗任务`);
       setSelectedIds([]);
-    } catch {
-      message.success(`已提交 ${selectedIds.length} 条情报的清洗任务`);
-      setSelectedIds([]);
+    } catch (err) {
+      message.error(`批量清洗失败: ${extractErrorMessage(err)}`);
     }
   };
 
@@ -197,22 +196,6 @@ const IntelligencePage: React.FC = () => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
-  };
-
-  const sourceTypeLabels: Record<string, string> = {
-    telegram: 'Telegram',
-    dark_web: '暗网',
-    forum: '论坛',
-    social_media: '社交媒体',
-    other: '其他',
-  };
-
-  const threatLevelLabels: Record<string, string> = {
-    critical: '严重',
-    high: '高危',
-    medium: '中危',
-    low: '低危',
-    info: '信息',
   };
 
   return (
@@ -248,7 +231,7 @@ const IntelligencePage: React.FC = () => {
               />
               <RangePicker
                 value={dateRange}
-                onChange={(dates) => setDateRange(dates as any)}
+                onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
                 style={{ width: 260 }}
               />
             </Space>
@@ -276,46 +259,68 @@ const IntelligencePage: React.FC = () => {
         </Row>
       </Card>
 
-      <Spin spinning={loading}>
-        {intelligences.length > 0 ? (
-          <>
-            {intelligences.map((intel) => (
-              <div key={intel.id} style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', left: 4, top: 20, zIndex: 1 }}>
-                  <Checkbox
-                    checked={selectedIds.includes(intel.id)}
-                    onChange={() => toggleSelect(intel.id)}
-                  />
-                </div>
-                <div style={{ marginLeft: 24 }}>
-                  <IntelCard
-                    intel={intel}
-                    onViewDetail={handleViewDetail}
-                    onAnalyze={handleAnalyze}
-                    onAddToGraph={handleAddToGraph}
-                  />
-                </div>
+      {error && (
+        <Alert
+          message="数据加载失败"
+          description={error}
+          type="error"
+          showIcon
+          closable
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={fetchIntelligences}>
+              重试
+            </Button>
+          }
+        />
+      )}
+
+      {loading && intelligences.length === 0 ? (
+        <div style={{ padding: '20px 0' }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} style={{ marginBottom: 12, borderRadius: 6 }}>
+              <Skeleton active paragraph={{ rows: 2 }} />
+            </Card>
+          ))}
+        </div>
+      ) : intelligences.length > 0 ? (
+        <Spin spinning={loading}>
+          {intelligences.map((intel) => (
+            <div key={intel.id} style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 4, top: 20, zIndex: 1 }}>
+                <Checkbox
+                  checked={selectedIds.includes(intel.id)}
+                  onChange={() => toggleSelect(intel.id)}
+                />
               </div>
-            ))}
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <Pagination
-                current={page}
-                pageSize={pageSize}
-                total={total}
-                showSizeChanger
-                showQuickJumper
-                showTotal={(t) => `共 ${t} 条情报`}
-                onChange={(p, ps) => {
-                  setPage(p);
-                  setPageSize(ps);
-                }}
-              />
+              <div style={{ marginLeft: 24 }}>
+                <IntelCard
+                  intel={intel}
+                  onViewDetail={handleViewDetail}
+                  onAnalyze={handleAnalyze}
+                  onAddToGraph={handleAddToGraph}
+                />
+              </div>
             </div>
-          </>
-        ) : (
-          <Empty description="暂无情报数据" />
-        )}
-      </Spin>
+          ))}
+          <div style={{ textAlign: 'center', marginTop: 16 }}>
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={total}
+              showSizeChanger
+              showQuickJumper
+              showTotal={(t) => `共 ${t} 条情报`}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              }}
+            />
+          </div>
+        </Spin>
+      ) : (
+        <Empty description={error ? '数据加载失败' : '暂无情报数据'} />
+      )}
 
       <Modal
         title="情报详情"
@@ -326,12 +331,16 @@ const IntelligencePage: React.FC = () => {
           <Button key="close" onClick={() => setDetailVisible(false)}>
             关闭
           </Button>,
-          <Button key="analyze" type="primary" icon={<ExperimentOutlined />} onClick={() => { if (selectedIntel) handleAnalyze(selectedIntel); }}>
+          <Button key="analyze" type="primary" icon={<ExperimentOutlined />} onClick={() => { if (selectedIntel) handleAnalyze(selectedIntel); }} disabled={!selectedIntel}>
             深度分析
           </Button>,
         ]}
       >
-        {selectedIntel && (
+        {detailLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" tip="加载详情..." />
+          </div>
+        ) : selectedIntel ? (
           <div>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="标题" span={2}>
@@ -382,7 +391,7 @@ const IntelligencePage: React.FC = () => {
               </>
             )}
           </div>
-        )}
+        ) : null}
       </Modal>
 
       <Modal
@@ -390,6 +399,7 @@ const IntelligencePage: React.FC = () => {
         open={collectVisible}
         onCancel={() => setCollectVisible(false)}
         onOk={() => collectForm.submit()}
+        confirmLoading={collectLoading}
         width={600}
       >
         <Form form={collectForm} layout="vertical" onFinish={handleCollect}>

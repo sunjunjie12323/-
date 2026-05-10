@@ -2,10 +2,11 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import Dict
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from sqlalchemy import func, select
 
+from app.core.auth import User, get_current_user
 from app.agents.orchestrator import OrchestratorAgent
 from app.core.blacktalk_engine import BlackTalkEngine
 from app.core.knowledge_graph import KnowledgeGraph
@@ -37,7 +38,10 @@ def get_vector_store(request: Request) -> VectorStore:
 
 
 @router.get("/stats")
-async def get_dashboard_stats(request: Request):
+async def get_dashboard_stats(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     kg = get_knowledge_graph(request)
     bt = get_blacktalk_engine(request)
     vector_store = get_vector_store(request)
@@ -124,6 +128,7 @@ async def get_dashboard_stats(request: Request):
 async def get_recent_intelligence(
     limit: int = Query(10, ge=1, le=50),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     items = []
     try:
@@ -186,7 +191,10 @@ async def get_recent_intelligence(
 
 
 @router.get("/threat-distribution")
-async def get_threat_distribution(request: Request):
+async def get_threat_distribution(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     distribution: Dict[str, int] = {
         "critical": 0,
         "high": 0,
@@ -230,7 +238,10 @@ async def get_threat_distribution(request: Request):
 
 
 @router.get("/agent-status")
-async def get_agent_status(request: Request):
+async def get_agent_status(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     orchestrator = get_orchestrator(request)
     try:
         status = orchestrator.get_agent_status()

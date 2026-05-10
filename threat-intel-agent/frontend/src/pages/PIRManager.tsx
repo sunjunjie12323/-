@@ -18,6 +18,7 @@ import {
   Spin,
   Tooltip,
   Empty,
+  Alert,
 } from 'antd';
 import {
   PlusOutlined,
@@ -32,8 +33,8 @@ import {
   CloseCircleOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
-import { pirApi } from '../services/api';
-import type { PIR, PIRTask, PaginatedResponse } from '../types';
+import { pirApi, taskApi, extractErrorMessage } from '../services/api';
+import type { PIR, PIRTask, Task } from '../types';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -63,6 +64,7 @@ const taskStatusConfig: Record<string, { color: string; label: string }> = {
 
 const PIRManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pirs, setPirs] = useState<PIR[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -70,49 +72,23 @@ const PIRManager: React.FC = () => {
   const [createVisible, setCreateVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedPIR, setSelectedPIR] = useState<PIR | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [executing, setExecuting] = useState<string | null>(null);
   const [decomposing, setDecomposing] = useState<string | null>(null);
+  const [createLoading, setCreateLoading] = useState(false);
   const [createForm] = Form.useForm();
 
   const fetchPIRs = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await pirApi.getPIRs({ page, page_size: pageSize });
       setPirs(result.items);
       setTotal(result.total);
-    } catch {
-      const mockData: PIR[] = Array.from({ length: 8 }, (_, i) => ({
-        id: `pir-${i + 1}`,
-        title: [
-          '追踪XX黑产组织的资金流向',
-          '分析近期钓鱼攻击趋势与手法',
-          '监控暗网公民个人信息交易',
-          '调查仿冒银行APP黑产链条',
-          '追踪虚拟货币洗钱网络',
-          '分析DDoS攻击服务提供者',
-          '监控新型勒索软件传播渠道',
-          '调查跨境电信诈骗团伙',
-        ][i],
-        description: '针对特定威胁的情报需求描述，包含详细的分析目标和关注重点。',
-        priority: (['critical', 'high', 'medium', 'low'] as const)[i % 4],
-        status: (['draft', 'active', 'executing', 'completed', 'archived'] as const)[i % 5],
-        created_at: dayjs().subtract(i * 2, 'day').toISOString(),
-        updated_at: dayjs().subtract(i, 'day').toISOString(),
-        tasks: Array.from({ length: Math.floor(Math.random() * 4) + 1 }, (_, j) => ({
-          id: `task-${i}-${j}`,
-          pir_id: `pir-${i + 1}`,
-          task_type: ['收集', '清洗', '分析', '关联'][j % 4],
-          description: `子任务${j + 1}: 执行情报${['收集', '清洗', '分析', '关联'][j % 4]}操作`,
-          status: (['pending', 'running', 'completed', 'failed'] as const)[j % 4],
-          created_at: dayjs().subtract(j, 'hour').toISOString(),
-        })),
-        fulfillment_score: Math.round(Math.random() * 100),
-        generated_reports: i % 3 === 0 ? [`report-${i + 1}`] : [],
-        keywords: ['钓鱼', '洗钱', '数据泄露', '恶意软件', 'DDoS'].slice(0, (i % 3) + 1),
-        target_entities: [`entity-${i + 1}`],
-      }));
-      setPirs(mockData);
-      setTotal(23);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setPirs([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -122,13 +98,15 @@ const PIRManager: React.FC = () => {
     fetchPIRs();
   }, [fetchPIRs]);
 
-  const handleCreate = async (values: any) => {
+  const handleCreate = async (values: Record<string, unknown>) => {
+    setCreateLoading(true);
     try {
-      await pirApi.createPIR(values);
+      await pirApi.createPIR(values as Partial<PIR>);
       message.success('PIR创建成功');
-    } catch {
-      message.success('PIR创建成功');
+    } catch (err) {
+      message.error(`创建失败: ${extractErrorMessage(err)}`);
     }
+    setCreateLoading(false);
     setCreateVisible(false);
     createForm.resetFields();
     fetchPIRs();
@@ -139,8 +117,8 @@ const PIRManager: React.FC = () => {
     try {
       await pirApi.decomposePIR(pirId);
       message.success('PIR分解完成');
-    } catch {
-      message.success('PIR分解完成，已生成子任务');
+    } catch (err) {
+      message.error(`分解失败: ${extractErrorMessage(err)}`);
     }
     setDecomposing(null);
     fetchPIRs();
@@ -149,23 +127,39 @@ const PIRManager: React.FC = () => {
   const handleExecute = async (pirId: string) => {
     setExecuting(pirId);
     try {
-      await pirApi.executePIR(pirId);
+      const result = await pirApi.executePIR(pirId);
       message.success('PIR执行已启动');
-    } catch {
-      message.success('PIR执行已启动');
+      if (result.id) {
+        try {
+          const task = await taskApi.waitForCompletion(result.id, 2000, 30);
+          if (task.status === 'completed') {
+            message.success('PIR执行完成');
+          } else if (task.status === 'failed') {
+            message.error(`PIR执行失败: ${task.error || '未知错误'}`);
+          }
+        } catch {
+          message.info('执行中，请稍后刷新查看结果');
+        }
+      }
+    } catch (err) {
+      message.error(`执行失败: ${extractErrorMessage(err)}`);
     }
     setExecuting(null);
     fetchPIRs();
   };
 
   const handleViewDetail = async (pir: PIR) => {
+    setDetailLoading(true);
+    setDetailVisible(true);
     try {
       const detail = await pirApi.getPIRDetail(pir.id);
       setSelectedPIR(detail);
-    } catch {
+    } catch (err) {
+      message.warning('详情加载失败，显示基本信息');
       setSelectedPIR(pir);
+    } finally {
+      setDetailLoading(false);
     }
-    setDetailVisible(true);
   };
 
   const columns = [
@@ -254,7 +248,7 @@ const PIRManager: React.FC = () => {
       title: '操作',
       key: 'actions',
       width: 200,
-      render: (_: any, record: PIR) => (
+      render: (_: unknown, record: PIR) => (
         <Space size="small">
           <Tooltip title="查看详情">
             <Button
@@ -289,6 +283,22 @@ const PIRManager: React.FC = () => {
 
   return (
     <div>
+      {error && (
+        <Alert
+          message="数据加载失败"
+          description={error}
+          type="error"
+          showIcon
+          closable
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={fetchPIRs}>
+              重试
+            </Button>
+          }
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Space>
           <Title level={5} style={{ margin: 0 }}>
@@ -311,6 +321,7 @@ const PIRManager: React.FC = () => {
         dataSource={pirs}
         rowKey="id"
         loading={loading}
+        locale={{ emptyText: error ? <Empty description="数据加载失败" /> : <Empty description="暂无PIR数据" /> }}
         pagination={{
           current: page,
           pageSize,
@@ -330,6 +341,7 @@ const PIRManager: React.FC = () => {
         open={createVisible}
         onCancel={() => setCreateVisible(false)}
         onOk={() => createForm.submit()}
+        confirmLoading={createLoading}
         width={640}
       >
         <Form form={createForm} layout="vertical" onFinish={handleCreate}>
@@ -390,7 +402,11 @@ const PIRManager: React.FC = () => {
           ),
         ].filter(Boolean)}
       >
-        {selectedPIR && (
+        {detailLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" tip="加载详情..." />
+          </div>
+        ) : selectedPIR ? (
           <div>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="标题" span={2}>
@@ -473,7 +489,7 @@ const PIRManager: React.FC = () => {
               </>
             )}
           </div>
-        )}
+        ) : null}
       </Modal>
     </div>
   );

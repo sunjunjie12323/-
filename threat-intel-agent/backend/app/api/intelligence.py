@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import User, get_current_user, require_role, Role
 from app.db.crud import IntelligenceCRUD
 from app.db.database import get_db
 from app.models.intelligence import (
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 async def create_raw_intelligence(
     data: RawIntelligence,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
     crud = IntelligenceCRUD(db)
     result = await crud.create_raw(data)
@@ -33,6 +35,7 @@ async def list_raw_intelligence(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     crud = IntelligenceCRUD(db)
     items, total = await crud.list_raw(source=source, status=status, offset=offset, limit=limit)
@@ -41,7 +44,11 @@ async def list_raw_intelligence(
 
 
 @router.get("/raw/{raw_id}", response_model=RawIntelligence)
-async def get_raw_intelligence(raw_id: str, db: AsyncSession = Depends(get_db)):
+async def get_raw_intelligence(
+    raw_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     crud = IntelligenceCRUD(db)
     result = await crud.get_raw(raw_id)
     if result is None:
@@ -54,6 +61,7 @@ async def update_raw_status(
     raw_id: str,
     status: IntelligenceStatus,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
     crud = IntelligenceCRUD(db)
     result = await crud.update_status(raw_id, status)
@@ -64,7 +72,11 @@ async def update_raw_status(
 
 
 @router.delete("/raw/{raw_id}", status_code=204)
-async def delete_raw_intelligence(raw_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_raw_intelligence(
+    raw_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
+):
     crud = IntelligenceCRUD(db)
     deleted = await crud.delete_raw(raw_id)
     if not deleted:
@@ -76,6 +88,7 @@ async def delete_raw_intelligence(raw_id: str, db: AsyncSession = Depends(get_db
 async def create_cleaned_intelligence(
     data: CleanedIntelligence,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
     crud = IntelligenceCRUD(db)
     raw = await crud.get_raw(data.raw_id)
@@ -93,6 +106,7 @@ async def list_cleaned_intelligence(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     crud = IntelligenceCRUD(db)
     items, total = await crud.list_cleaned(
@@ -103,7 +117,11 @@ async def list_cleaned_intelligence(
 
 
 @router.get("/cleaned/{cleaned_id}", response_model=CleanedIntelligence)
-async def get_cleaned_intelligence(cleaned_id: str, db: AsyncSession = Depends(get_db)):
+async def get_cleaned_intelligence(
+    cleaned_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     crud = IntelligenceCRUD(db)
     result = await crud.get_cleaned(cleaned_id)
     if result is None:
@@ -115,6 +133,7 @@ async def get_cleaned_intelligence(cleaned_id: str, db: AsyncSession = Depends(g
 async def create_analyzed_intelligence(
     data: AnalyzedIntelligence,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
 ):
     crud = IntelligenceCRUD(db)
     cleaned = await crud.get_cleaned(data.cleaned_id)
@@ -132,6 +151,7 @@ async def list_analyzed_intelligence(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     crud = IntelligenceCRUD(db)
     items, total = await crud.list_analyzed(
@@ -142,7 +162,11 @@ async def list_analyzed_intelligence(
 
 
 @router.get("/analyzed/{analyzed_id}", response_model=AnalyzedIntelligence)
-async def get_analyzed_intelligence(analyzed_id: str, db: AsyncSession = Depends(get_db)):
+async def get_analyzed_intelligence(
+    analyzed_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     crud = IntelligenceCRUD(db)
     result = await crud.get_analyzed(analyzed_id)
     if result is None:

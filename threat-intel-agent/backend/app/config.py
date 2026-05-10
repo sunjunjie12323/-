@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     ALGORITHM: str = "HS256"
 
+    RATE_LIMIT_PER_MINUTE: int = 60
+    MAX_CONCURRENT_TASKS: int = 3
+    DEFAULT_ADMIN_USERNAME: str = "admin"
+    DEFAULT_ADMIN_PASSWORD: str = "admin123"
+
     @property
     def cors_origins_list(self) -> List[str]:
         try:

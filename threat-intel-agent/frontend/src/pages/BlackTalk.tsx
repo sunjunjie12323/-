@@ -19,7 +19,7 @@ import {
   message,
   Spin,
   Empty,
-  Tooltip,
+  Alert,
 } from 'antd';
 import {
   SearchOutlined,
@@ -30,8 +30,8 @@ import {
   RobotOutlined,
   BookOutlined,
 } from '@ant-design/icons';
-import { blackTalkApi } from '../services/api';
-import type { BlackTalkTerm, DecodeResult, PaginatedResponse } from '../types';
+import { blackTalkApi, extractErrorMessage } from '../services/api';
+import type { BlackTalkTerm, DecodeResult } from '../types';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -61,6 +61,7 @@ const categoryColors: Record<string, string> = {
 
 const BlackTalk: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [terms, setTerms] = useState<BlackTalkTerm[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -68,7 +69,7 @@ const BlackTalk: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
   const [addVisible, setAddVisible] = useState(false);
-  const [decodeVisible, setDecodeVisible] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
   const [decodeText, setDecodeText] = useState('');
   const [decodeResult, setDecodeResult] = useState<DecodeResult | null>(null);
   const [decoding, setDecoding] = useState(false);
@@ -77,6 +78,7 @@ const BlackTalk: React.FC = () => {
 
   const fetchTerms = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await blackTalkApi.getBlackTalkTerms({
         query: searchQuery || undefined,
@@ -86,47 +88,10 @@ const BlackTalk: React.FC = () => {
       });
       setTerms(result.items);
       setTotal(result.total);
-    } catch {
-      const mockTerms: BlackTalkTerm[] = Array.from({ length: 20 }, (_, i) => ({
-        id: `bt-${i + 1}`,
-        term: [
-          '跑分', '料子', '水房', '黑吃黑', '洗白',
-          '接单', '挂马', '社工', '肉鸡', '菠菜',
-          '出黑', '下分', '上分', '洗码', '对敲',
-          '撞库', '脱库', '洗库', '社工库', '黑产',
-        ][i],
-        meaning: [
-          '利用第三方支付渠道进行资金转移和洗钱',
-          '窃取的公民个人信息数据',
-          '专门处理非法资金清洗的团队或平台',
-          '黑产内部互相欺骗或侵占对方利益',
-          '将非法资金通过多种手段变为合法资金',
-          '接收客户委托进行非法操作',
-          '在网站植入恶意代码',
-          '利用社会工程学进行诈骗',
-          '被黑客控制的受控计算机',
-          '网络赌博的暗语',
-          '将黑产资金转出',
-          '赌博平台提取资金',
-          '向赌博平台充值',
-          '赌博平台代理佣金结算',
-          '通过相互转账制造合法交易假象',
-          '使用泄露的账号密码尝试登录其他平台',
-          '从数据库中窃取大量数据',
-          '对窃取的数据进行清洗和整理',
-          '整合社会工程学和数据库泄露信息的查询平台',
-          '黑色产业链的简称',
-        ][i],
-        category: (['fraud', 'money_laundering', 'gambling', 'phishing', 'malware', 'data_theft', 'fraud', 'money_laundering', 'malware', 'gambling', 'money_laundering', 'gambling', 'gambling', 'gambling', 'money_laundering', 'data_theft', 'data_theft', 'data_theft', 'data_theft', 'other'] as const)[i],
-        confidence: 0.7 + Math.random() * 0.3,
-        is_auto_learned: i % 3 === 0,
-        source: i % 3 === 0 ? '自动学习' : '人工录入',
-        created_at: dayjs().subtract(i, 'day').toISOString(),
-        usage_count: Math.floor(Math.random() * 200) + 10,
-        related_terms: [],
-      }));
-      setTerms(mockTerms);
-      setTotal(156);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setTerms([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -141,13 +106,15 @@ const BlackTalk: React.FC = () => {
     fetchTerms();
   };
 
-  const handleAddTerm = async (values: any) => {
+  const handleAddTerm = async (values: Record<string, unknown>) => {
+    setAddLoading(true);
     try {
-      await blackTalkApi.addBlackTalkTerm(values);
+      await blackTalkApi.addBlackTalkTerm(values as Partial<BlackTalkTerm>);
       message.success('术语添加成功');
-    } catch {
-      message.success('术语添加成功');
+    } catch (err) {
+      message.error(`添加失败: ${extractErrorMessage(err)}`);
     }
+    setAddLoading(false);
     setAddVisible(false);
     addForm.resetFields();
     fetchTerms();
@@ -162,24 +129,8 @@ const BlackTalk: React.FC = () => {
     try {
       const result = await blackTalkApi.decodeText(decodeText);
       setDecodeResult(result);
-    } catch {
-      const mockResult: DecodeResult = {
-        original_text: decodeText,
-        decoded_text: decodeText
-          .replace('跑分', '[资金转移]')
-          .replace('料子', '[个人信息数据]')
-          .replace('水房', '[资金清洗团队]')
-          .replace('洗白', '[资金合法化]')
-          .replace('菠菜', '[网络赌博]')
-          .replace('出黑', '[资金转出]')
-          .replace('挂马', '[植入恶意代码]')
-          .replace('肉鸡', '[受控计算机]'),
-        found_terms: [
-          { term: '跑分', meaning: '利用第三方支付渠道进行资金转移和洗钱', position: [decodeText.indexOf('跑分'), decodeText.indexOf('跑分') + 2] as [number, number] },
-          { term: '料子', meaning: '窃取的公民个人信息数据', position: [decodeText.indexOf('料子'), decodeText.indexOf('料子') + 2] as [number, number] },
-        ].filter((t) => t.position[0] >= 0),
-      };
-      setDecodeResult(mockResult);
+    } catch (err) {
+      message.error(`解码失败: ${extractErrorMessage(err)}`);
     } finally {
       setDecoding(false);
     }
@@ -195,9 +146,7 @@ const BlackTalk: React.FC = () => {
         <Space>
           <Text strong style={{ fontSize: 14 }}>{term}</Text>
           {record.is_auto_learned && (
-            <Tooltip title="自动学习">
-              <RobotOutlined style={{ color: '#1890ff', fontSize: 12 }} />
-            </Tooltip>
+            <RobotOutlined style={{ color: '#1890ff', fontSize: 12 }} />
           )}
         </Space>
       ),
@@ -282,6 +231,22 @@ const BlackTalk: React.FC = () => {
             ),
             children: (
               <div>
+                {error && (
+                  <Alert
+                    message="数据加载失败"
+                    description={error}
+                    type="error"
+                    showIcon
+                    closable
+                    style={{ marginBottom: 16 }}
+                    action={
+                      <Button size="small" onClick={fetchTerms}>
+                        重试
+                      </Button>
+                    }
+                  />
+                )}
+
                 <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
                   <Col span={6}>
                     <Card size="small" style={{ borderRadius: 8 }}>
@@ -338,7 +303,7 @@ const BlackTalk: React.FC = () => {
                     <Button
                       type="primary"
                       icon={<TranslationOutlined />}
-                      onClick={() => setDecodeVisible(true)}
+                      onClick={() => setActiveTab('decode')}
                     >
                       解码工具
                     </Button>
@@ -350,6 +315,7 @@ const BlackTalk: React.FC = () => {
                   dataSource={terms}
                   rowKey="id"
                   loading={loading}
+                  locale={{ emptyText: error ? <Empty description="数据加载失败" /> : <Empty description="暂无术语数据" /> }}
                   pagination={{
                     current: page,
                     pageSize,
@@ -452,51 +418,61 @@ const BlackTalk: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col span={12}>
                   <Card title="分类分布" style={{ borderRadius: 8 }}>
-                    {Object.entries(categoryCountMap).map(([category, count]) => (
-                      <div key={category} style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Tag color={categoryColors[category]}>{categoryLabels[category] || category}</Tag>
-                          <Text type="secondary">{count}</Text>
+                    {Object.keys(categoryCountMap).length > 0 ? (
+                      Object.entries(categoryCountMap).map(([category, count]) => (
+                        <div key={category} style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Tag color={categoryColors[category]}>{categoryLabels[category] || category}</Tag>
+                            <Text type="secondary">{count}</Text>
+                          </div>
+                          <Progress
+                            percent={terms.length > 0 ? Math.round((count / terms.length) * 100) : 0}
+                            showInfo={false}
+                            strokeColor={categoryColors[category]}
+                            size="small"
+                          />
                         </div>
-                        <Progress
-                          percent={Math.round((count / terms.length) * 100)}
-                          showInfo={false}
-                          strokeColor={categoryColors[category]}
-                          size="small"
-                        />
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <Empty description="暂无统计数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    )}
                   </Card>
                 </Col>
                 <Col span={12}>
                   <Card title="置信度分布" style={{ borderRadius: 8 }}>
-                    {[
-                      { label: '高置信度 (>80%)', count: terms.filter((t) => t.confidence > 0.8).length, color: '#52c41a' },
-                      { label: '中置信度 (50-80%)', count: terms.filter((t) => t.confidence > 0.5 && t.confidence <= 0.8).length, color: '#faad14' },
-                      { label: '低置信度 (<50%)', count: terms.filter((t) => t.confidence <= 0.5).length, color: '#ff4d4f' },
-                    ].map((item) => (
-                      <div key={item.label} style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text style={{ fontSize: 13 }}>{item.label}</Text>
-                          <Text type="secondary">{item.count}</Text>
-                        </div>
-                        <Progress
-                          percent={terms.length > 0 ? Math.round((item.count / terms.length) * 100) : 0}
-                          showInfo={false}
-                          strokeColor={item.color}
-                          size="small"
-                        />
-                      </div>
-                    ))}
-                    <Divider />
-                    <Row gutter={16}>
-                      <Col span={12}>
-                        <Statistic title="人工录入" value={terms.filter((t) => !t.is_auto_learned).length} valueStyle={{ fontSize: 20 }} />
-                      </Col>
-                      <Col span={12}>
-                        <Statistic title="自动学习" value={autoLearnedCount} valueStyle={{ fontSize: 20, color: '#1890ff' }} />
-                      </Col>
-                    </Row>
+                    {terms.length > 0 ? (
+                      <>
+                        {[
+                          { label: '高置信度 (>80%)', count: terms.filter((t) => t.confidence > 0.8).length, color: '#52c41a' },
+                          { label: '中置信度 (50-80%)', count: terms.filter((t) => t.confidence > 0.5 && t.confidence <= 0.8).length, color: '#faad14' },
+                          { label: '低置信度 (<50%)', count: terms.filter((t) => t.confidence <= 0.5).length, color: '#ff4d4f' },
+                        ].map((item) => (
+                          <div key={item.label} style={{ marginBottom: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Text style={{ fontSize: 13 }}>{item.label}</Text>
+                              <Text type="secondary">{item.count}</Text>
+                            </div>
+                            <Progress
+                              percent={terms.length > 0 ? Math.round((item.count / terms.length) * 100) : 0}
+                              showInfo={false}
+                              strokeColor={item.color}
+                              size="small"
+                            />
+                          </div>
+                        ))}
+                        <Divider />
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <Statistic title="人工录入" value={terms.filter((t) => !t.is_auto_learned).length} valueStyle={{ fontSize: 20 }} />
+                          </Col>
+                          <Col span={12}>
+                            <Statistic title="自动学习" value={autoLearnedCount} valueStyle={{ fontSize: 20, color: '#1890ff' }} />
+                          </Col>
+                        </Row>
+                      </>
+                    ) : (
+                      <Empty description="暂无统计数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    )}
                   </Card>
                 </Col>
               </Row>
@@ -510,6 +486,7 @@ const BlackTalk: React.FC = () => {
         open={addVisible}
         onCancel={() => setAddVisible(false)}
         onOk={() => addForm.submit()}
+        confirmLoading={addLoading}
         width={560}
       >
         <Form form={addForm} layout="vertical" onFinish={handleAddTerm}>

@@ -11,11 +11,15 @@ from loguru import logger
 
 from app.api import api_router
 from app.config import settings
+from app.core.auth import create_default_admin, cleanup_expired_blacklisted_tokens
 from app.core.blacktalk_engine import BlackTalkEngine
 from app.core.evidence_chain import EvidenceChain
+from app.core.exceptions import AppException, RateLimitExceededException
 from app.core.knowledge_graph import KnowledgeGraph
 from app.core.llm import LLMService
 from app.core.pir_engine import PIREngine
+from app.core.rate_limiter import rate_limiter
+from app.core.task_queue import task_queue
 from app.core.vector_store import VectorStore
 from app.db.database import init_db
 
@@ -50,12 +54,12 @@ manager = ConnectionManager()
 async def _initialize_services(app: FastAPI):
     logger.info("Initializing core services...")
 
-    logger.info("[1/11] Creating LLMService...")
+    logger.info("[1/12] Creating LLMService...")
     llm = LLMService()
     app.state.llm = llm
     logger.info("LLMService created")
 
-    logger.info("[2/11] Creating VectorStore...")
+    logger.info("[2/12] Creating VectorStore...")
     vector_store = VectorStore(
         persist_dir=settings.CHROMA_PERSIST_DIR,
         llm=llm,
@@ -63,17 +67,17 @@ async def _initialize_services(app: FastAPI):
     app.state.vector_store = vector_store
     logger.info("VectorStore created")
 
-    logger.info("[3/11] Creating KnowledgeGraph...")
+    logger.info("[3/12] Creating KnowledgeGraph...")
     knowledge_graph = KnowledgeGraph(persist_dir="./graph_data")
     app.state.knowledge_graph = knowledge_graph
     logger.info("KnowledgeGraph created")
 
-    logger.info("[4/11] Creating BlackTalkEngine...")
+    logger.info("[4/12] Creating BlackTalkEngine...")
     blacktalk_engine = BlackTalkEngine(llm=llm, vector_store=vector_store)
     app.state.blacktalk_engine = blacktalk_engine
     logger.info(f"BlackTalkEngine created with {len(blacktalk_engine._dictionary)} seed terms")
 
-    logger.info("[5/11] Initializing BlackTalkEngine vectors...")
+    logger.info("[5/12] Initializing BlackTalkEngine vectors...")
     try:
         await asyncio.wait_for(blacktalk_engine.initialize_vectors(), timeout=30.0)
         logger.info("BlackTalkEngine vectors initialized")
@@ -82,17 +86,17 @@ async def _initialize_services(app: FastAPI):
     except Exception as exc:
         logger.warning(f"BlackTalkEngine vector initialization failed: {exc}. Vectors will be built on-demand.")
 
-    logger.info("[6/11] Creating EvidenceChain...")
+    logger.info("[6/12] Creating EvidenceChain...")
     evidence_chain = EvidenceChain(llm=llm, vector_store=vector_store)
     app.state.evidence_chain = evidence_chain
     logger.info("EvidenceChain created")
 
-    logger.info("[7/11] Creating PIREngine...")
+    logger.info("[7/12] Creating PIREngine...")
     pir_engine = PIREngine(llm=llm, vector_store=vector_store)
     app.state.pir_engine = pir_engine
     logger.info("PIREngine created")
 
-    logger.info("[8/11] Creating OrchestratorAgent with all sub-agents...")
+    logger.info("[8/12] Creating OrchestratorAgent with all sub-agents...")
     from app.agents.orchestrator import OrchestratorAgent
 
     orchestrator = OrchestratorAgent(
@@ -106,7 +110,7 @@ async def _initialize_services(app: FastAPI):
     app.state.orchestrator = orchestrator
     logger.info("OrchestratorAgent created with all sub-agents")
 
-    logger.info("[9/11] Creating collectors...")
+    logger.info("[9/12] Creating collectors...")
     from app.collectors.telegram_collector import TelegramCollector
     from app.collectors.forum_collector import ForumCollector
     from app.collectors.wechat_collector import WeChatCollector
@@ -123,20 +127,34 @@ async def _initialize_services(app: FastAPI):
     app.state.darkweb_collector = darkweb_collector
     logger.info("All collectors created")
 
-    logger.info("[10/11] Registering collectors with CollectorAgent...")
+    logger.info("[10/12] Registering collectors with CollectorAgent...")
     orchestrator.collector.register_collector("telegram", telegram_collector.collect)
     orchestrator.collector.register_collector("forum", forum_collector.collect)
     orchestrator.collector.register_collector("wechat", wechat_collector.collect)
     orchestrator.collector.register_collector("darkweb", darkweb_collector.collect)
     logger.info("All collectors registered")
 
-    logger.info("[11/11] Storing service references in app.state...")
+    logger.info("[11/12] Registering task queue handlers and starting workers...")
+    from app.api.agent import register_agent_handlers
+    register_agent_handlers()
+    await task_queue.start()
+    logger.info(f"Task queue started with {settings.MAX_CONCURRENT_TASKS} workers")
+
+    logger.info("[12/12] Creating default admin user...")
+    create_default_admin()
     app.state.connection_manager = manager
     logger.info("All services initialized and stored in app.state")
 
 
 async def _shutdown_services(app: FastAPI):
     logger.info("Shutting down services...")
+
+    logger.info("Stopping task queue workers...")
+    try:
+        await task_queue.stop()
+        logger.info("Task queue stopped")
+    except Exception as exc:
+        logger.warning(f"Failed to stop task queue: {exc}")
 
     if hasattr(app.state, "knowledge_graph"):
         try:
@@ -181,7 +199,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="黑灰产情报分析Agent",
     description="Black/Grey Market Intelligence Analysis Agent API — 提供情报采集、清洗、分析、报告全流程管理",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -203,10 +221,31 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    response = await rate_limiter.middleware(request, call_next)
+    return response
+
+
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException):
+    error_response = {"error": exc.to_dict()}
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content=error_response,
+    )
+    if isinstance(exc, RateLimitExceededException):
+        retry_after = exc.details.get("retry_after_seconds", 60)
+        response.headers["Retry-After"] = str(int(retry_after))
+    return response
+
+
+@app.middleware("http")
 async def error_handling_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         return response
+    except AppException:
+        raise
     except Exception as exc:
         logger.error(
             f"Unhandled exception in {request.method} {request.url.path}: {exc}\n"
@@ -215,8 +254,11 @@ async def error_handling_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=500,
             content={
-                "detail": "Internal server error",
-                "path": str(request.url.path),
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error",
+                    "details": {"path": str(request.url.path)},
+                }
             },
         )
 
@@ -231,11 +273,20 @@ async def health_check(request: Request):
                  "evidence_chain", "pir_engine", "orchestrator"):
         services_status[attr] = hasattr(request.app.state, attr)
 
+    task_queue_stats = {
+        "total_tasks": len(task_queue._tasks),
+        "pending": sum(1 for t in task_queue._tasks.values() if t.status.value == "pending"),
+        "running": sum(1 for t in task_queue._tasks.values() if t.status.value == "running"),
+        "completed": sum(1 for t in task_queue._tasks.values() if t.status.value == "completed"),
+        "failed": sum(1 for t in task_queue._tasks.values() if t.status.value == "failed"),
+    }
+
     return {
         "status": "healthy",
         "service": "threat-intel-agent",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "services": services_status,
+        "task_queue": task_queue_stats,
     }
 
 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, List, Tag, Badge, Progress, Typography, Space, Timeline, Empty, Spin, Tooltip, Divider } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Row, Col, Card, List, Tag, Badge, Progress, Typography, Space, Timeline, Empty, Spin, Tooltip, Divider, Alert, Button, Skeleton } from 'antd';
 import {
   SearchOutlined,
   AimOutlined,
@@ -11,11 +11,12 @@ import {
   CloseCircleOutlined,
   ClockCircleOutlined,
   ThunderboltOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import StatCard from '../components/StatCard';
 import IntelCard from '../components/IntelCard';
-import { dashboardApi } from '../services/api';
-import type { DashboardStats, Intelligence, AgentStatus, ExecutionRecord } from '../types';
+import { dashboardApi, taskApi, extractErrorMessage } from '../services/api';
+import type { DashboardStats, Intelligence, AgentStatus, ExecutionRecord, Task } from '../types';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -42,129 +43,117 @@ const executionStatusConfig: Record<string, { color: string; icon: React.ReactNo
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentTasks, setRecentTasks] = useState<Task[]>([]);
+
+  const fetchData = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await dashboardApi.getDashboardStats();
+      setStats(data);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchTasks = useCallback(async () => {
+    try {
+      const result = await taskApi.getTasks({ limit: 5 });
+      setRecentTasks(result.items);
+    } catch {
+      // task fetch failure is non-critical
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const data = await dashboardApi.getDashboardStats();
-        setStats(data);
-      } catch {
-        setStats({
-          total_intelligence: 1284,
-          active_pirs: 23,
-          threat_alerts: 47,
-          graph_nodes: 3562,
-          threat_level_distribution: {
-            critical: 12,
-            high: 35,
-            medium: 89,
-            low: 156,
-            info: 992,
-          },
-          source_type_distribution: {
-            telegram: 420,
-            dark_web: 280,
-            forum: 350,
-            social_media: 180,
-            other: 54,
-          },
-          recent_intelligence: [
-            {
-              id: '1',
-              title: '某暗网论坛出现新型钓鱼工具包售卖信息',
-              content: '检测到暗网论坛新帖，售卖针对金融平台的钓鱼工具包，包含模板和部署脚本',
-              source: '暗网论坛',
-              source_type: 'dark_web',
-              threat_level: 'high',
-              collected_at: dayjs().subtract(1, 'hour').toISOString(),
-              is_processed: true,
-              entities: [],
-              tags: ['钓鱼', '金融'],
-            },
-            {
-              id: '2',
-              title: 'Telegram群组传播公民个人信息数据集',
-              content: '某Telegram群组正在传播包含约50万条公民个人信息的数据集',
-              source: 'Telegram',
-              source_type: 'telegram',
-              threat_level: 'critical',
-              collected_at: dayjs().subtract(2, 'hour').toISOString(),
-              is_processed: true,
-              entities: [],
-              tags: ['数据泄露', '个人信息'],
-            },
-            {
-              id: '3',
-              title: '发现仿冒银行APP的安卓恶意软件',
-              content: '监测到仿冒某大型银行APP的安卓恶意软件，具有短信拦截和键盘记录功能',
-              source: '社交媒体',
-              source_type: 'social_media',
-              threat_level: 'high',
-              collected_at: dayjs().subtract(3, 'hour').toISOString(),
-              is_processed: false,
-              entities: [],
-              tags: ['恶意软件', '银行'],
-            },
-            {
-              id: '4',
-              title: '某黑产团伙使用新型洗钱通道',
-              content: '追踪到某黑产团伙通过虚拟货币混币器进行洗钱的新型通道',
-              source: 'Telegram',
-              source_type: 'telegram',
-              threat_level: 'medium',
-              collected_at: dayjs().subtract(5, 'hour').toISOString(),
-              is_processed: true,
-              entities: [],
-              tags: ['洗钱', '虚拟货币'],
-            },
-            {
-              id: '5',
-              title: '论坛出现新型DDoS攻击服务广告',
-              content: '某黑客论坛出现提供DDoS攻击服务的广告，声称可突破主流CDN防护',
-              source: '黑客论坛',
-              source_type: 'forum',
-              threat_level: 'medium',
-              collected_at: dayjs().subtract(6, 'hour').toISOString(),
-              is_processed: true,
-              entities: [],
-              tags: ['DDoS', '攻击服务'],
-            },
-          ] as Intelligence[],
-          agent_statuses: [
-            { name: '收集Agent', status: 'running', current_task: '监控Telegram群组', execution_count: 156 },
-            { name: '清洗Agent', status: 'idle', execution_count: 89 },
-            { name: '分析Agent', status: 'running', current_task: '分析钓鱼工具包关联', execution_count: 67 },
-            { name: '图谱Agent', status: 'idle', execution_count: 45 },
-          ] as AgentStatus[],
-          recent_executions: [
-            { id: '1', query: '分析近期钓鱼攻击趋势', status: 'completed', started_at: dayjs().subtract(1, 'hour').toISOString(), agent_name: '分析Agent', result_summary: '发现3个新钓鱼团伙' },
-            { id: '2', query: '追踪虚拟货币洗钱路径', status: 'running', started_at: dayjs().subtract(30, 'minute').toISOString(), agent_name: '图谱Agent' },
-            { id: '3', query: '关联暗网数据泄露事件', status: 'completed', started_at: dayjs().subtract(2, 'hour').toISOString(), agent_name: '分析Agent', result_summary: '关联5个数据泄露源' },
-          ] as ExecutionRecord[],
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
-  }, []);
+    fetchTasks();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchTasks();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData, fetchTasks]);
+
+  const handleRetry = () => {
+    setLoading(true);
+    fetchData();
+    fetchTasks();
+  };
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-        <Spin size="large" tip="加载态势数据..." />
+      <div>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Col xs={24} sm={12} lg={6} key={i}>
+              <Card style={{ borderRadius: 8 }}>
+                <Skeleton active paragraph={{ rows: 1 }} />
+              </Card>
+            </Col>
+          ))}
+        </Row>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} lg={14}>
+            <Card style={{ borderRadius: 8 }}>
+              <Skeleton active paragraph={{ rows: 6 }} />
+            </Card>
+          </Col>
+          <Col xs={24} lg={10}>
+            <Card style={{ borderRadius: 8, marginBottom: 16 }}>
+              <Skeleton active paragraph={{ rows: 4 }} />
+            </Card>
+            <Card style={{ borderRadius: 8 }}>
+              <Skeleton active paragraph={{ rows: 3 }} />
+            </Card>
+          </Col>
+        </Row>
+      </div>
+    );
+  }
+
+  if (error && !stats) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+        <Result
+          status="error"
+          title="数据加载失败"
+          subTitle={error}
+          extra={
+            <Button type="primary" icon={<ReloadOutlined />} onClick={handleRetry}>
+              重新加载
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   if (!stats) return null;
 
-  const totalThreats = Object.values(stats.threat_level_distribution).reduce((a, b) => a + b, 0) || 1;
+  const totalThreats = Object.values(stats.threat_level_distribution || {}).reduce((a, b) => a + b, 0) || 1;
 
   return (
     <div>
+      {error && (
+        <Alert
+          message="部分数据刷新失败"
+          description={error}
+          type="warning"
+          showIcon
+          closable
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRetry}>
+              重试
+            </Button>
+          }
+        />
+      )}
+
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
@@ -172,8 +161,6 @@ const Dashboard: React.FC = () => {
             value={stats.total_intelligence}
             icon={<SearchOutlined />}
             color="#1890ff"
-            trend="up"
-            trendValue="12%"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -182,8 +169,6 @@ const Dashboard: React.FC = () => {
             value={stats.active_pirs}
             icon={<AimOutlined />}
             color="#722ed1"
-            trend="up"
-            trendValue="5%"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -192,8 +177,6 @@ const Dashboard: React.FC = () => {
             value={stats.threat_alerts}
             icon={<AlertOutlined />}
             color="#ff4d4f"
-            trend="down"
-            trendValue="8%"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -202,8 +185,6 @@ const Dashboard: React.FC = () => {
             value={stats.graph_nodes}
             icon={<ApartmentOutlined />}
             color="#52c41a"
-            trend="up"
-            trendValue="15%"
           />
         </Col>
       </Row>
@@ -240,27 +221,31 @@ const Dashboard: React.FC = () => {
             style={{ borderRadius: 8, marginBottom: 16 }}
             styles={{ body: { padding: '16px 24px' } }}
           >
-            {Object.entries(stats.threat_level_distribution || {}).map(([level, count]) => {
-              const config = threatLevelConfig[level] || threatLevelConfig.info;
-              const percent = Math.round((count / totalThreats) * 100);
-              return (
-                <div key={level} style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13 }}>
-                      <Badge color={config.color} text={config.label} />
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{count} ({percent}%)</Text>
+            {Object.entries(stats.threat_level_distribution || {}).length > 0 ? (
+              Object.entries(stats.threat_level_distribution).map(([level, count]) => {
+                const config = threatLevelConfig[level] || threatLevelConfig.info;
+                const percent = Math.round((count / totalThreats) * 100);
+                return (
+                  <div key={level} style={{ marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13 }}>
+                        <Badge color={config.color} text={config.label} />
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{count} ({percent}%)</Text>
+                    </div>
+                    <Progress
+                      percent={percent}
+                      showInfo={false}
+                      strokeColor={config.color}
+                      trailColor="#f0f0f0"
+                      size="small"
+                    />
                   </div>
-                  <Progress
-                    percent={percent}
-                    showInfo={false}
-                    strokeColor={config.color}
-                    trailColor="#f0f0f0"
-                    size="small"
-                  />
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <Empty description="暂无威胁数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            )}
           </Card>
           <Card
             title={
@@ -272,39 +257,43 @@ const Dashboard: React.FC = () => {
             style={{ borderRadius: 8 }}
             styles={{ body: { padding: '12px 24px' } }}
           >
-            <List
-              dataSource={stats.agent_statuses || []}
-              renderItem={(agent: AgentStatus) => (
-                <List.Item style={{ padding: '8px 0', border: 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                    <Space>
-                      {agentStatusIcons[agent.status]}
-                      <Text style={{ fontSize: 13 }}>{agent.name}</Text>
-                    </Space>
-                    <Space size="small">
-                      {agent.current_task && (
-                        <Tooltip title={agent.current_task}>
-                          <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>
-                            {agent.current_task.length > 10
-                              ? agent.current_task.slice(0, 10) + '...'
-                              : agent.current_task}
-                          </Tag>
-                        </Tooltip>
-                      )}
-                      <Tag
-                        color={agent.status === 'running' ? 'processing' : agent.status === 'error' ? 'error' : 'default'}
-                        style={{ fontSize: 11, margin: 0 }}
-                      >
-                        {agent.status === 'running' ? '运行中' : agent.status === 'error' ? '异常' : '空闲'}
-                      </Tag>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {agent.execution_count}次
-                      </Text>
-                    </Space>
-                  </div>
-                </List.Item>
-              )}
-            />
+            {stats.agent_statuses?.length ? (
+              <List
+                dataSource={stats.agent_statuses}
+                renderItem={(agent: AgentStatus) => (
+                  <List.Item style={{ padding: '8px 0', border: 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                      <Space>
+                        {agentStatusIcons[agent.status]}
+                        <Text style={{ fontSize: 13 }}>{agent.name}</Text>
+                      </Space>
+                      <Space size="small">
+                        {agent.current_task && (
+                          <Tooltip title={agent.current_task}>
+                            <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>
+                              {agent.current_task.length > 10
+                                ? agent.current_task.slice(0, 10) + '...'
+                                : agent.current_task}
+                            </Tag>
+                          </Tooltip>
+                        )}
+                        <Tag
+                          color={agent.status === 'running' ? 'processing' : agent.status === 'error' ? 'error' : 'default'}
+                          style={{ fontSize: 11, margin: 0 }}
+                        >
+                          {agent.status === 'running' ? '运行中' : agent.status === 'error' ? '异常' : '空闲'}
+                        </Tag>
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {agent.execution_count}次
+                        </Text>
+                      </Space>
+                    </div>
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty description="暂无Agent状态" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            )}
           </Card>
         </Col>
       </Row>
@@ -321,33 +310,97 @@ const Dashboard: React.FC = () => {
             style={{ borderRadius: 8 }}
             styles={{ body: { padding: '12px 24px' } }}
           >
-            <Timeline
-              items={(stats.recent_executions || []).map((exec: ExecutionRecord) => ({
-                color: executionStatusConfig[exec.status]?.color === 'success' ? 'green' : executionStatusConfig[exec.status]?.color === 'error' ? 'red' : 'blue',
-                children: (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Space>
-                      {executionStatusConfig[exec.status]?.icon}
-                      <Text style={{ fontSize: 13 }}>{exec.query}</Text>
-                      <Tag style={{ fontSize: 11, margin: 0 }}>{exec.agent_name}</Tag>
-                    </Space>
-                    <Space>
-                      {exec.result_summary && (
-                        <Text type="secondary" style={{ fontSize: 12 }}>{exec.result_summary}</Text>
-                      )}
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {dayjs(exec.started_at).format('HH:mm')}
-                      </Text>
-                    </Space>
-                  </div>
-                ),
-              }))}
-            />
+            {stats.recent_executions?.length ? (
+              <Timeline
+                items={stats.recent_executions.map((exec: ExecutionRecord) => ({
+                  color: executionStatusConfig[exec.status]?.color === 'success' ? 'green' : executionStatusConfig[exec.status]?.color === 'error' ? 'red' : 'blue',
+                  children: (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Space>
+                        {executionStatusConfig[exec.status]?.icon}
+                        <Text style={{ fontSize: 13 }}>{exec.query}</Text>
+                        <Tag style={{ fontSize: 11, margin: 0 }}>{exec.agent_name}</Tag>
+                      </Space>
+                      <Space>
+                        {exec.result_summary && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>{exec.result_summary}</Text>
+                        )}
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {dayjs(exec.started_at).format('HH:mm')}
+                        </Text>
+                      </Space>
+                    </div>
+                  ),
+                }))}
+              />
+            ) : (
+              <Empty description="暂无执行记录" />
+            )}
           </Card>
         </Col>
       </Row>
+
+      {recentTasks.length > 0 && (
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24}>
+            <Card
+              title={
+                <Space>
+                  <SyncOutlined />
+                  <span>任务队列</span>
+                </Space>
+              }
+              style={{ borderRadius: 8 }}
+              styles={{ body: { padding: '12px 24px' } }}
+            >
+              <List
+                size="small"
+                dataSource={recentTasks}
+                renderItem={(task) => (
+                  <List.Item style={{ padding: '8px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                      <Space>
+                        <Tag color={
+                          task.status === 'running' ? 'processing' :
+                          task.status === 'completed' ? 'success' :
+                          task.status === 'failed' ? 'error' : 'default'
+                        }>
+                          {task.status === 'pending' ? '待执行' :
+                           task.status === 'running' ? '执行中' :
+                           task.status === 'completed' ? '已完成' :
+                           task.status === 'failed' ? '失败' : '已取消'}
+                        </Tag>
+                        <Text style={{ fontSize: 13 }}>{task.type}</Text>
+                      </Space>
+                      <Space>
+                        {task.status === 'running' && (
+                          <Progress percent={Math.round(task.progress)} size="small" style={{ width: 100 }} />
+                        )}
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {dayjs(task.created_at).format('HH:mm')}
+                        </Text>
+                      </Space>
+                    </div>
+                  </List.Item>
+                )}
+              />
+            </Card>
+          </Col>
+        </Row>
+      )}
     </div>
   );
 };
 
 export default Dashboard;
+
+function Result({ status, title, subTitle, extra }: { status: "error"; title: string; subTitle: string; extra: React.ReactNode }) {
+  return (
+    <Card style={{ borderRadius: 8, maxWidth: 480, textAlign: 'center' }}>
+      <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f', marginBottom: 16 }} />
+      <Title level={4} style={{ marginBottom: 8 }}>{title}</Title>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>{subTitle}</Text>
+      {extra}
+    </Card>
+  );
+}

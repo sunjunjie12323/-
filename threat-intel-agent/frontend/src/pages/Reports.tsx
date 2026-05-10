@@ -18,6 +18,7 @@ import {
   Badge,
   Tooltip,
   message,
+  Alert,
 } from 'antd';
 import {
   FileTextOutlined,
@@ -32,8 +33,8 @@ import {
   LinkOutlined,
   SafetyOutlined,
 } from '@ant-design/icons';
-import { reportApi, pirApi } from '../services/api';
-import type { Report, ReportSection, EvidenceItem, PIR, PaginatedResponse } from '../types';
+import { reportApi, pirApi, extractErrorMessage } from '../services/api';
+import type { Report, PIR } from '../types';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -62,103 +63,44 @@ const sectionTypeColors: Record<string, string> = {
 
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [generateVisible, setGenerateVisible] = useState(false);
   const [selectedPIRId, setSelectedPIRId] = useState<string>('');
   const [pirOptions, setPirOptions] = useState<PIR[]>([]);
+  const [pirLoading, setPirLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await reportApi.getReports({ page, page_size: 10 });
       setReports(result.items);
       setTotal(result.total);
-    } catch {
-      const mockReports: Report[] = Array.from({ length: 6 }, (_, i) => ({
-        id: `report-${i + 1}`,
-        title: [
-          'XX黑产组织资金流向分析报告',
-          '近期钓鱼攻击趋势与手法分析',
-          '暗网公民个人信息交易监测报告',
-          '仿冒银行APP黑产链条调查报告',
-          '虚拟货币洗钱网络追踪报告',
-          '跨境电信诈骗团伙分析报告',
-        ][i],
-        pir_id: `pir-${i + 1}`,
-        status: (['completed', 'completed', 'generating', 'completed', 'failed', 'completed'] as const)[i],
-        created_at: dayjs().subtract(i * 2, 'day').toISOString(),
-        summary: '本报告基于多源情报数据，对目标黑产组织进行了深入分析，揭示了其运作模式、资金流向和关联网络。',
-        sections: [
-          {
-            title: '概述',
-            content: '本次分析针对特定黑产组织展开，通过多源情报收集和关联分析，识别出该组织的核心成员、运作模式和资金流向。分析周期为近30天，共收集相关情报128条，关联实体45个。',
-            type: 'overview',
-          },
-          {
-            title: '分析发现',
-            content: '1. 该组织采用分层管理架构，核心层位于境外，操作层分布在国内多个城市。\n2. 资金通过虚拟货币混币器进行清洗，涉及BTC和ETH两种主要币种。\n3. 使用Telegram作为主要通信工具，采用黑话进行内部沟通。\n4. 技术团队持续开发新型钓鱼工具包，每月更新版本。',
-            type: 'analysis',
-          },
-          {
-            title: '证据链',
-            content: '证据1: 暗网论坛帖子截图，发布时间为2024年1月15日\n证据2: Telegram群组聊天记录，包含交易确认信息\n证据3: 虚拟货币交易链上记录，确认资金流向\n证据4: 钓鱼网站WHOIS信息，关联到已知注册者',
-            type: 'evidence',
-          },
-          {
-            title: '处置建议',
-            content: '1. 建议对识别的钓鱼网站进行封堵\n2. 将相关虚拟货币地址列入监控名单\n3. 对涉及的Telegram群组持续监控\n4. 协调相关部门对核心成员进行追踪',
-            type: 'recommendation',
-          },
-        ],
-        evidence_chain: [
-          {
-            id: `ev-${i}-1`,
-            description: '暗网论坛发布钓鱼工具包售卖信息',
-            source: '暗网论坛',
-            confidence: 0.92,
-            related_entities: ['entity-1', 'entity-2'],
-            timestamp: dayjs().subtract(5, 'day').toISOString(),
-          },
-          {
-            id: `ev-${i}-2`,
-            description: 'Telegram群组确认交易信息',
-            source: 'Telegram',
-            confidence: 0.88,
-            related_entities: ['entity-3'],
-            timestamp: dayjs().subtract(3, 'day').toISOString(),
-          },
-          {
-            id: `ev-${i}-3`,
-            description: '链上交易记录确认资金转移',
-            source: '区块链',
-            confidence: 0.95,
-            related_entities: ['entity-4', 'entity-5'],
-            timestamp: dayjs().subtract(1, 'day').toISOString(),
-          },
-        ],
-      }));
-      setReports(mockReports);
-      setTotal(12);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setReports([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   }, [page]);
 
   const fetchPIROptions = useCallback(async () => {
+    setPirLoading(true);
     try {
       const result = await pirApi.getPIRs({ page: 1, page_size: 50 });
       setPirOptions(result.items);
-    } catch {
-      setPirOptions([
-        { id: 'pir-1', title: '追踪XX黑产组织的资金流向', priority: 'critical', status: 'active', tasks: [], fulfillment_score: 75, generated_reports: [], keywords: [], target_entities: [], created_at: '', updated_at: '', description: '' },
-        { id: 'pir-2', title: '分析近期钓鱼攻击趋势与手法', priority: 'high', status: 'completed', tasks: [], fulfillment_score: 100, generated_reports: [], keywords: [], target_entities: [], created_at: '', updated_at: '', description: '' },
-        { id: 'pir-3', title: '监控暗网公民个人信息交易', priority: 'high', status: 'active', tasks: [], fulfillment_score: 60, generated_reports: [], keywords: [], target_entities: [], created_at: '', updated_at: '', description: '' },
-      ]);
+    } catch (err) {
+      message.warning('PIR列表加载失败');
+      setPirOptions([]);
+    } finally {
+      setPirLoading(false);
     }
   }, []);
 
@@ -173,13 +115,16 @@ const Reports: React.FC = () => {
   }, [generateVisible, fetchPIROptions]);
 
   const handleViewDetail = async (report: Report) => {
+    setDetailLoading(true);
     try {
       const detail = await reportApi.getReportDetail(report.id);
       setSelectedReport(detail);
-    } catch {
+    } catch (err) {
+      message.warning('报告详情加载失败，显示基本信息');
       setSelectedReport(report);
+    } finally {
+      setDetailLoading(false);
     }
-    setDetailVisible(true);
   };
 
   const handleGenerate = async () => {
@@ -191,8 +136,8 @@ const Reports: React.FC = () => {
     try {
       await reportApi.generateReport(selectedPIRId);
       message.success('报告生成任务已创建');
-    } catch {
-      message.success('报告生成任务已创建');
+    } catch (err) {
+      message.error(`生成失败: ${extractErrorMessage(err)}`);
     }
     setGenerating(false);
     setGenerateVisible(false);
@@ -214,6 +159,22 @@ const Reports: React.FC = () => {
 
   return (
     <div>
+      {error && (
+        <Alert
+          message="数据加载失败"
+          description={error}
+          type="error"
+          showIcon
+          closable
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={fetchReports}>
+              重试
+            </Button>
+          }
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Space>
           <Title level={5} style={{ margin: 0 }}>分析报告</Title>
@@ -235,48 +196,58 @@ const Reports: React.FC = () => {
             styles={{ body: { padding: 0 } }}
           >
             <Spin spinning={loading}>
-              <List
-                dataSource={reports}
-                renderItem={(report) => {
-                  const config = statusConfig[report.status] || statusConfig.completed;
-                  return (
-                    <List.Item
-                      style={{
-                        padding: '12px 16px',
-                        cursor: 'pointer',
-                        transition: 'background 0.2s',
-                      }}
-                      onClick={() => handleViewDetail(report)}
-                      className="report-list-item"
-                    >
-                      <div style={{ width: '100%' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                          <Text strong ellipsis style={{ fontSize: 13, flex: 1, marginRight: 8 }}>
-                            {report.title}
-                          </Text>
-                          <Tag color={config.color} icon={config.icon} style={{ fontSize: 11, margin: 0 }}>
-                            {config.label}
-                          </Tag>
+              {reports.length > 0 ? (
+                <List
+                  dataSource={reports}
+                  renderItem={(report) => {
+                    const config = statusConfig[report.status] || statusConfig.completed;
+                    return (
+                      <List.Item
+                        style={{
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          transition: 'background 0.2s',
+                          background: selectedReport?.id === report.id ? '#f0f5ff' : undefined,
+                        }}
+                        onClick={() => handleViewDetail(report)}
+                      >
+                        <div style={{ width: '100%' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                            <Text strong ellipsis style={{ fontSize: 13, flex: 1, marginRight: 8 }}>
+                              {report.title}
+                            </Text>
+                            <Tag color={config.color} icon={config.icon} style={{ fontSize: 11, margin: 0 }}>
+                              {config.label}
+                            </Tag>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                              PIR: {report.pir_id}
+                            </Text>
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                              {dayjs(report.created_at).format('YYYY-MM-DD HH:mm')}
+                            </Text>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
-                            PIR: {report.pir_id}
-                          </Text>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
-                            {dayjs(report.created_at).format('YYYY-MM-DD HH:mm')}
-                          </Text>
-                        </div>
-                      </div>
-                    </List.Item>
-                  );
-                }}
-                locale={{ emptyText: <Empty description="暂无报告" /> }}
-              />
+                      </List.Item>
+                    );
+                  }}
+                  locale={{ emptyText: <Empty description="暂无报告" /> }}
+                />
+              ) : (
+                <Empty description="暂无报告" style={{ padding: 40 }} />
+              )}
             </Spin>
           </Card>
         </Col>
         <Col span={16}>
-          {selectedReport ? (
+          {detailLoading ? (
+            <Card style={{ borderRadius: 8, minHeight: 400 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+                <Spin size="large" tip="加载报告详情..." />
+              </div>
+            </Card>
+          ) : selectedReport ? (
             <div>
               <Card
                 style={{ borderRadius: 8, marginBottom: 16 }}
@@ -314,7 +285,7 @@ const Reports: React.FC = () => {
                 <Divider style={{ margin: '12px 0' }} />
                 <Text type="secondary" style={{ fontSize: 12 }}>摘要</Text>
                 <Paragraph style={{ marginTop: 8, fontSize: 14 }}>
-                  {selectedReport.summary}
+                  {selectedReport.summary || '暂无摘要'}
                 </Paragraph>
               </Card>
 
@@ -399,6 +370,7 @@ const Reports: React.FC = () => {
           onChange={setSelectedPIRId}
           showSearch
           optionFilterProp="label"
+          loading={pirLoading}
           options={pirOptions.map((pir) => ({
             label: `${pir.title} (${pir.status === 'completed' ? '已完成' : '进行中'})`,
             value: pir.id,

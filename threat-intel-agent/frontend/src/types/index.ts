@@ -1,3 +1,65 @@
+export type Role = 'admin' | 'analyst' | 'viewer';
+
+export interface User {
+  id: string;
+  username: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  role: Role;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface TokenPayload {
+  sub: string;
+  username: string;
+  role: Role;
+  exp: number;
+  iat: number;
+}
+
+export type TaskStatusType = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface Task {
+  id: string;
+  type: string;
+  status: TaskStatusType;
+  params: Record<string, unknown>;
+  result: unknown | null;
+  error: string | null;
+  progress: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface TaskListResponse {
+  items: Task[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 export interface Intelligence {
   id: string;
   title: string;
@@ -187,4 +249,12 @@ export interface SearchParams {
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
   filters?: Record<string, string | string[]>;
+}
+
+export interface ApiError {
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+  };
 }

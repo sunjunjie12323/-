@@ -1,9 +1,10 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from app.core.auth import User, get_current_user, require_role, Role
 from app.core.knowledge_graph import KnowledgeGraph
 from app.models.entity import Entity, EntityType, Relation, RelationType
 
@@ -41,7 +42,10 @@ def get_knowledge_graph(request: Request) -> KnowledgeGraph:
 
 
 @router.get("/stats")
-async def graph_stats(request: Request):
+async def graph_stats(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     kg = get_knowledge_graph(request)
     try:
         stats = await kg.get_statistics()
@@ -58,6 +62,7 @@ async def list_entities(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     kg = get_knowledge_graph(request)
     try:
@@ -88,7 +93,11 @@ async def list_entities(
 
 
 @router.get("/entities/{entity_id}")
-async def get_entity(entity_id: str, request: Request):
+async def get_entity(
+    entity_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     kg = get_knowledge_graph(request)
     try:
         entity = await kg.get_entity(entity_id)
@@ -113,6 +122,7 @@ async def list_relations(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     kg = get_knowledge_graph(request)
     try:
@@ -134,7 +144,11 @@ async def list_relations(
 
 
 @router.post("/entities", status_code=201)
-async def add_entity(data: EntityCreate, request: Request):
+async def add_entity(
+    data: EntityCreate,
+    request: Request,
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
+):
     kg = get_knowledge_graph(request)
     try:
         try:
@@ -162,7 +176,11 @@ async def add_entity(data: EntityCreate, request: Request):
 
 
 @router.post("/relations", status_code=201)
-async def add_relation(data: RelationCreate, request: Request):
+async def add_relation(
+    data: RelationCreate,
+    request: Request,
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
+):
     kg = get_knowledge_graph(request)
     try:
         try:
@@ -203,7 +221,11 @@ async def add_relation(data: RelationCreate, request: Request):
 
 
 @router.post("/path")
-async def find_path(data: PathRequest, request: Request):
+async def find_path(
+    data: PathRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     kg = get_knowledge_graph(request)
     try:
         source = await kg.get_entity(data.source_id)
@@ -249,7 +271,11 @@ async def find_path(data: PathRequest, request: Request):
 
 
 @router.post("/communities")
-async def find_communities(data: CommunityRequest, request: Request):
+async def find_communities(
+    data: CommunityRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     kg = get_knowledge_graph(request)
     try:
         communities = await kg.find_communities(algorithm=data.algorithm)
@@ -285,6 +311,7 @@ async def get_subgraph(
     entity_id: str,
     depth: int = Query(1, ge=1, le=3),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     kg = get_knowledge_graph(request)
     try:
@@ -307,6 +334,7 @@ async def get_subgraph(
 async def export_graph(
     format: str = Query("json"),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     kg = get_knowledge_graph(request)
     try:

@@ -1,9 +1,10 @@
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from app.core.auth import User, get_current_user, require_role, Role
 from app.core.blacktalk_engine import BlackTalkEngine
 from app.core.llm import LLMService
 from app.core.vector_store import VectorStore
@@ -41,6 +42,7 @@ async def list_terms(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     engine = get_blacktalk_engine(request)
     try:
@@ -66,7 +68,11 @@ async def list_terms(
 
 
 @router.get("/terms/{term_id}")
-async def get_term(term_id: str, request: Request):
+async def get_term(
+    term_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     engine = get_blacktalk_engine(request)
     term = engine._dictionary.get(term_id)
     if term is None:
@@ -75,7 +81,11 @@ async def get_term(term_id: str, request: Request):
 
 
 @router.post("/terms", status_code=201)
-async def add_term(data: BlackTalkTermCreate, request: Request):
+async def add_term(
+    data: BlackTalkTermCreate,
+    request: Request,
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
+):
     engine = get_blacktalk_engine(request)
     try:
         bt = await engine.learn(
@@ -91,7 +101,11 @@ async def add_term(data: BlackTalkTermCreate, request: Request):
 
 
 @router.post("/decode")
-async def decode_text(data: BlackTalkDecodeRequest, request: Request):
+async def decode_text(
+    data: BlackTalkDecodeRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     engine = get_blacktalk_engine(request)
     try:
         decoded_text, decoded_terms = await engine.decode(data.text)
@@ -119,6 +133,7 @@ async def search_blacktalk(
     q: str = Query(..., min_length=1),
     n: int = Query(10, ge=1, le=50),
     request: Request = None,
+    current_user: User = Depends(get_current_user),
 ):
     engine = get_blacktalk_engine(request)
     try:
@@ -134,7 +149,10 @@ async def search_blacktalk(
 
 
 @router.get("/stats")
-async def get_stats(request: Request):
+async def get_stats(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     engine = get_blacktalk_engine(request)
     try:
         all_terms = await engine.get_all()

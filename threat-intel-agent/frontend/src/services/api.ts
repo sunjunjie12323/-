@@ -13,19 +13,47 @@ import type {
   DashboardStats,
   PaginatedResponse,
   SearchParams,
+  User,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  ChangePasswordRequest,
+  Task,
+  TaskListResponse,
+  ApiError,
 } from '../types';
 
+const TOKEN_KEY = 'threat_intel_token';
+const USER_KEY = 'threat_intel_user';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: '/api/v1',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}> = [];
+
+const processQueue = (error: unknown) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(undefined);
+    }
+  });
+  failedQueue = [];
+};
+
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -37,13 +65,142 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => api(originalRequest));
+      }
+      originalRequest._retry = true;
+      isRefreshing = true;
+      clearAuth();
+      processQueue(error);
+      isRefreshing = false;
       window.location.href = '/login';
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   },
 );
+
+function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearAuth(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+function getStoredUser(): User | null {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as User;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredUser(user: User): void {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as ApiError | undefined;
+    if (data?.error?.message) {
+      return data.error.message;
+    }
+    if (error.message === 'Network Error') {
+      return '网络连接失败，请检查网络或服务是否可用';
+    }
+    if (error.code === 'ECONNABORTED') {
+      return '请求超时，请稍后重试';
+    }
+    return error.message || '请求失败';
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return '未知错误';
+}
+
+export const authApi = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const { data: resp } = await api.post('/auth/login', data);
+    setToken(resp.access_token);
+    setStoredUser(resp.user);
+    return resp;
+  },
+
+  register: async (data: RegisterRequest): Promise<User> => {
+    const { data: resp } = await api.post('/auth/register', data);
+    return resp;
+  },
+
+  getMe: async (): Promise<User> => {
+    const { data: resp } = await api.get('/auth/me');
+    setStoredUser(resp);
+    return resp;
+  },
+
+  logout: async (): Promise<void> => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // ignore errors on logout
+    } finally {
+      clearAuth();
+    }
+  },
+
+  changePassword: async (data: ChangePasswordRequest): Promise<void> => {
+    await api.put('/auth/password', data);
+  },
+
+  listUsers: async (): Promise<User[]> => {
+    const { data } = await api.get('/auth/users');
+    return data;
+  },
+};
+
+export const taskApi = {
+  getTasks: async (params?: { status?: string; offset?: number; limit?: number }): Promise<TaskListResponse> => {
+    const { data } = await api.get('/tasks', { params });
+    return data;
+  },
+
+  getTask: async (taskId: string): Promise<Task> => {
+    const { data } = await api.get(`/tasks/${taskId}`);
+    return data;
+  },
+
+  cancelTask: async (taskId: string): Promise<void> => {
+    await api.post(`/tasks/${taskId}/cancel`);
+  },
+
+  getTaskResult: async (taskId: string): Promise<{ task_id: string; type: string; result: unknown; completed_at: string | null }> => {
+    const { data } = await api.get(`/tasks/${taskId}/result`);
+    return data;
+  },
+
+  waitForCompletion: async (taskId: string, intervalMs = 2000, maxAttempts = 60): Promise<Task> => {
+    for (let i = 0; i < maxAttempts; i++) {
+      const task = await taskApi.getTask(taskId);
+      if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
+        return task;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new Error('任务轮询超时');
+  },
+};
 
 export const intelligenceApi = {
   getIntelligences: async (params?: SearchParams): Promise<PaginatedResponse<Intelligence>> => {
@@ -191,4 +348,5 @@ export const dashboardApi = {
   },
 };
 
+export { getToken, setToken, clearAuth, getStoredUser, setStoredUser, extractErrorMessage };
 export default api;

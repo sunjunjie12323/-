@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout as AntLayout, Menu, Typography, Badge, Space, Tooltip, Breadcrumb, theme } from 'antd';
+import { Layout as AntLayout, Menu, Avatar, Dropdown, Badge, Tag, Space, Typography } from 'antd';
 import {
   DashboardOutlined,
   SearchOutlined,
@@ -8,110 +7,89 @@ import {
   AimOutlined,
   MessageOutlined,
   FileTextOutlined,
-  RobotOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  UserOutlined,
+  LogoutOutlined,
   WifiOutlined,
-  AlertOutlined,
+  DisconnectOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
-import type { MenuProps } from 'antd';
-import { agentApi } from '../services/api';
-import type { AgentStatus } from '../types';
-import dayjs from 'dayjs';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { authApi, taskApi, getStoredUser, getToken } from '../services/api';
+import type { User, Task } from '../types';
 
-const { Header, Sider, Content, Footer } = AntLayout;
+const { Header, Sider, Content } = AntLayout;
 const { Text } = Typography;
 
-const menuItems: MenuProps['items'] = [
-  {
-    key: '/',
-    icon: <DashboardOutlined />,
-    label: '态势总览',
-  },
-  {
-    key: '/intelligence',
-    icon: <SearchOutlined />,
-    label: '情报管理',
-  },
-  {
-    key: '/graph',
-    icon: <ApartmentOutlined />,
-    label: '知识图谱',
-  },
-  {
-    key: '/pir',
-    icon: <AimOutlined />,
-    label: '情报需求',
-  },
-  {
-    key: '/blacktalk',
-    icon: <MessageOutlined />,
-    label: '黑话词典',
-  },
-  {
-    key: '/reports',
-    icon: <FileTextOutlined />,
-    label: '分析报告',
-  },
+const menuItems = [
+  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/intelligence', icon: <SearchOutlined />, label: '情报中心' },
+  { key: '/graph', icon: <ApartmentOutlined />, label: '关系图谱' },
+  { key: '/pir', icon: <AimOutlined />, label: 'PIR管理' },
+  { key: '/blacktalk', icon: <MessageOutlined />, label: '黑话解码' },
+  { key: '/reports', icon: <FileTextOutlined />, label: '分析报告' },
 ];
 
-const breadcrumbMap: Record<string, string> = {
-  '/': '态势总览',
-  '/intelligence': '情报管理',
-  '/graph': '知识图谱',
-  '/pir': '情报需求',
-  '/blacktalk': '黑话词典',
-  '/reports': '分析报告',
-};
+interface LayoutProps {
+  children: React.ReactNode;
+}
 
-const AppLayout: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
-  const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
+const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { token } = theme.useToken();
+  const [collapsed, setCollapsed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [connected, setConnected] = useState(true);
+  const [runningTasks, setRunningTasks] = useState(0);
 
   useEffect(() => {
-    const fetchStatus = async () => {
+    const user = getStoredUser();
+    setCurrentUser(user);
+    setConnected(!!getToken());
+  }, []);
+
+  useEffect(() => {
+    const checkTasks = async () => {
       try {
-        const statuses = await agentApi.getAgentStatus();
-        setAgentStatuses(statuses);
+        const result = await taskApi.getTasks({ status: 'running', limit: 1 });
+        setRunningTasks(result.total);
+        setConnected(true);
       } catch {
-        setAgentStatuses([
-          { name: '收集Agent', status: 'idle', execution_count: 0 },
-          { name: '清洗Agent', status: 'idle', execution_count: 0 },
-          { name: '分析Agent', status: 'idle', execution_count: 0 },
-          { name: '图谱Agent', status: 'idle', execution_count: 0 },
-        ]);
+        setConnected(false);
       }
     };
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
+    checkTasks();
+    const interval = setInterval(checkTasks, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  const onMenuClick: MenuProps['onClick'] = ({ key }) => {
-    navigate(key);
+  const handleLogout = async () => {
+    await authApi.logout();
+    navigate('/login', { replace: true });
   };
 
-  const pathSnippets = location.pathname.split('/').filter((i) => i);
-  const breadcrumbItems = [
-    { title: '黑灰产情报分析' },
-    ...pathSnippets.map((_, index) => {
-      const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
-      return { title: breadcrumbMap[url] || url };
-    }),
+  const userMenuItems = [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: `${currentUser?.username || '用户'} (${currentUser?.role === 'admin' ? '管理员' : currentUser?.role === 'analyst' ? '分析师' : '观察者'})`,
+      disabled: true,
+    },
+    { type: 'divider' as const },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '退出登录',
+      onClick: handleLogout,
+    },
   ];
-
-  const runningAgents = agentStatuses.filter((a) => a.status === 'running').length;
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
       <Sider
-        trigger={null}
         collapsible
         collapsed={collapsed}
-        width={220}
+        onCollapse={setCollapsed}
+        theme="dark"
         style={{
           overflow: 'auto',
           height: '100vh',
@@ -119,105 +97,91 @@ const AppLayout: React.FC = () => {
           left: 0,
           top: 0,
           bottom: 0,
-          background: 'linear-gradient(180deg, #001529 0%, #002140 100%)',
-          boxShadow: '2px 0 8px rgba(0,0,0,0.3)',
+          zIndex: 10,
         }}
       >
         <div
           style={{
-            height: 64,
+            height: 48,
+            margin: 12,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? '0' : '0 20px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            justifyContent: 'center',
+            background: 'rgba(255,255,255,0.1)',
+            borderRadius: 6,
           }}
         >
-          <RobotOutlined style={{ fontSize: 28, color: '#1890ff' }} />
-          {!collapsed && (
-            <Text
-              strong
-              style={{
-                color: '#fff',
-                marginLeft: 12,
-                fontSize: 16,
-                whiteSpace: 'nowrap',
-                letterSpacing: 1,
-              }}
-            >
-              情报分析Agent
-            </Text>
-          )}
+          <Text
+            strong
+            style={{
+              color: '#fff',
+              fontSize: collapsed ? 14 : 16,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+            }}
+          >
+            {collapsed ? '黑灰' : '黑灰产情报分析'}
+          </Text>
         </div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
-          onClick={onMenuClick}
-          style={{
-            borderRight: 0,
-            background: 'transparent',
-            marginTop: 8,
-          }}
+          onClick={({ key }) => navigate(key)}
         />
       </Sider>
-      <AntLayout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s' }}>
+      <AntLayout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
         <Header
           style={{
             padding: '0 24px',
-            background: token.colorBgContainer,
+            background: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
             position: 'sticky',
             top: 0,
-            zIndex: 10,
+            zIndex: 9,
           }}
         >
-          <Space size="middle">
-            {React.createElement(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined, {
-              style: { fontSize: 18, cursor: 'pointer' },
-              onClick: () => setCollapsed(!collapsed),
-            })}
-            <Breadcrumb items={breadcrumbItems} />
-          </Space>
-          <Space size="middle">
-            <Tooltip title={`${runningAgents} 个Agent运行中`}>
-              <Badge status={runningAgents > 0 ? 'processing' : 'default'} />
-              <WifiOutlined style={{ color: runningAgents > 0 ? '#52c41a' : '#999' }} />
-            </Tooltip>
-            <Tooltip title="威胁告警">
-              <Badge count={0} size="small">
-                <AlertOutlined style={{ fontSize: 18 }} />
+          <Space size="large">
+            <Space size="small">
+              {connected ? (
+                <Tag icon={<WifiOutlined />} color="success" style={{ margin: 0 }}>
+                  已连接
+                </Tag>
+              ) : (
+                <Tag icon={<DisconnectOutlined />} color="error" style={{ margin: 0 }}>
+                  未连接
+                </Tag>
+              )}
+            </Space>
+            {runningTasks > 0 && (
+              <Badge count={runningTasks} size="small" offset={[2, 0]}>
+                <Tag icon={<SyncOutlined spin />} color="processing" style={{ margin: 0 }}>
+                  执行中
+                </Tag>
               </Badge>
-            </Tooltip>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {dayjs().format('YYYY-MM-DD HH:mm')}
-            </Text>
+            )}
           </Space>
+          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar
+                size="small"
+                icon={<UserOutlined />}
+                style={{ backgroundColor: currentUser?.role === 'admin' ? '#f5222d' : currentUser?.role === 'analyst' ? '#1890ff' : '#52c41a' }}
+              />
+              <Text style={{ fontSize: 13 }}>{currentUser?.username || '未登录'}</Text>
+            </Space>
+          </Dropdown>
         </Header>
-        <Content
-          style={{
-            margin: 16,
-            padding: 20,
-            background: token.colorBgContainer,
-            borderRadius: 8,
-            minHeight: 280,
-            overflow: 'auto',
-          }}
-        >
-          <Outlet />
+        <Content style={{ margin: 16, padding: 20, background: '#f5f5f5', minHeight: 'auto', borderRadius: 8 }}>
+          {children}
         </Content>
-        <Footer style={{ textAlign: 'center', padding: '8px 0', background: 'transparent' }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            黑灰产情报分析Agent v1.0.0 · 安全态势感知平台
-          </Text>
-        </Footer>
       </AntLayout>
     </AntLayout>
   );
 };
 
-export default AppLayout;
+export default Layout;

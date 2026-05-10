@@ -1,58 +1,103 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ConfigProvider, theme } from 'antd';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import AppLayout from './components/Layout';
+import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Intelligence from './pages/Intelligence';
 import GraphView from './pages/GraphView';
 import PIRManager from './pages/PIRManager';
 import BlackTalk from './pages/BlackTalk';
 import Reports from './pages/Reports';
+import Login from './pages/Login';
+import { getToken } from './services/api';
+
+const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = getToken();
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Layout>{children}</Layout>;
+};
+
+const LoginGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = getToken();
+  if (token) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
 
 const App: React.FC = () => {
   return (
     <ConfigProvider
       locale={zhCN}
       theme={{
-        algorithm: theme.defaultAlgorithm,
         token: {
           colorPrimary: '#1890ff',
           borderRadius: 6,
-          fontSize: 14,
-          colorBgContainer: '#ffffff',
-          colorBgLayout: '#f0f2f5',
-        },
-        components: {
-          Layout: {
-            siderBg: '#001529',
-            headerBg: '#ffffff',
-          },
-          Menu: {
-            darkItemBg: 'transparent',
-            darkSubMenuItemBg: 'transparent',
-            darkItemSelectedBg: '#1890ff',
-            darkItemHoverBg: 'rgba(24, 144, 255, 0.15)',
-          },
-          Card: {
-            borderRadiusLG: 8,
-          },
-          Table: {
-            borderRadiusLG: 8,
-          },
         },
       }}
     >
       <BrowserRouter>
         <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/intelligence" element={<Intelligence />} />
-            <Route path="/graph" element={<GraphView />} />
-            <Route path="/pir" element={<PIRManager />} />
-            <Route path="/blacktalk" element={<BlackTalk />} />
-            <Route path="/reports" element={<Reports />} />
-          </Route>
+          <Route
+            path="/login"
+            element={
+              <LoginGuard>
+                <Login />
+              </LoginGuard>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <AuthGuard>
+                <Dashboard />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/intelligence"
+            element={
+              <AuthGuard>
+                <Intelligence />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/graph"
+            element={
+              <AuthGuard>
+                <GraphView />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/pir"
+            element={
+              <AuthGuard>
+                <PIRManager />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/blacktalk"
+            element={
+              <AuthGuard>
+                <BlackTalk />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <AuthGuard>
+                <Reports />
+              </AuthGuard>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </ConfigProvider>
