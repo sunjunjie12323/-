@@ -1,11 +1,29 @@
 import asyncio
+import hashlib
 import json
+import math
+import struct
 from typing import AsyncGenerator, Dict, List, Optional
 
 import httpx
 from loguru import logger
 
 from app.config import settings
+
+_EMBEDDING_DIM = 1536
+
+
+def _hash_embedding(text: str, dim: int = _EMBEDDING_DIM) -> List[float]:
+    raw = hashlib.sha512(text.encode("utf-8")).digest()
+    values = []
+    for i in range(dim):
+        chunk = hashlib.sha256(f"{text}|{i}".encode("utf-8")).digest()
+        val = struct.unpack("f", chunk[:4])[0]
+        values.append(val)
+    magnitude = math.sqrt(sum(v * v for v in values))
+    if magnitude == 0:
+        return [0.0] * dim
+    return [v / magnitude for v in values]
 
 
 class LLMService:
@@ -234,56 +252,9 @@ class LLMService:
         raise RuntimeError("Max retries exceeded for streaming request")
 
     async def embed(self, text: str) -> List[float]:
-        async def _request():
-            client = await self._get_client()
-            payload = {
-                "model": "text-embedding-3-small",
-                "input": text,
-            }
-            response = await client.post(
-                f"{self.base_url}/embeddings",
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["data"][0]["embedding"]
-
-        try:
-            return await self._retry_request(_request)
-        except Exception as exc:
-            logger.error(f"Failed to generate embedding: {exc}")
-            raise
+        return _hash_embedding(text)
 
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
-
-        batch_size = 64
-        all_embeddings: List[List[float]] = []
-
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i : i + batch_size]
-
-            async def _request(batch=batch):
-                client = await self._get_client()
-                payload = {
-                    "model": "text-embedding-3-small",
-                    "input": batch,
-                }
-                response = await client.post(
-                    f"{self.base_url}/embeddings",
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-                sorted_data = sorted(data["data"], key=lambda x: x["index"])
-                return [item["embedding"] for item in sorted_data]
-
-            try:
-                batch_embeddings = await self._retry_request(_request)
-                all_embeddings.extend(batch_embeddings)
-            except Exception as exc:
-                logger.error(f"Failed to generate batch embeddings: {exc}")
-                raise
-
-        return all_embeddings
+        return [_hash_embedding(t) for t in texts]
