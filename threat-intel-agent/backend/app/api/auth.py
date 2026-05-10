@@ -1,5 +1,7 @@
+import re
+import time
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,14 +17,54 @@ from app.core.auth import (
     create_user,
     get_all_users,
     get_current_user,
+    get_user_by_username,
+    hash_password,
     require_role,
     update_user_password,
     verify_password,
-    get_user_by_username,
 )
 from app.core.exceptions import ForbiddenException, UnauthorizedException, ValidationException
 
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_LOGIN_ATTEMPTS: dict = {}
+_MAX_LOGIN_ATTEMPTS = 5
+_LOCKOUT_SECONDS = 300
+
+
+def _check_login_lockout(username: str):
+    record = _LOGIN_ATTEMPTS.get(username)
+    if record is None:
+        return
+    attempts, locked_until = record
+    if locked_until and time.time() < locked_until:
+        remaining = int(locked_until - time.time())
+        raise ForbiddenException(detail=f"账号已锁定，请{remaining}秒后重试")
+    if locked_until and time.time() >= locked_until:
+        del _LOGIN_ATTEMPTS[username]
+
+
+def _record_failed_login(username: str):
+    record = _LOGIN_ATTEMPTS.get(username, [0, None])
+    record[0] += 1
+    if record[0] >= _MAX_LOGIN_ATTEMPTS:
+        record[1] = time.time() + _LOCKOUT_SECONDS
+        logger.warning(f"Account locked due to brute force: {username}")
+    _LOGIN_ATTEMPTS[username] = record
+
+
+def _clear_failed_logins(username: str):
+    _LOGIN_ATTEMPTS.pop(username, None)
+
+
+def _validate_password_strength(password: str):
+    if len(password) < 8:
+        raise ValidationException(detail="密码长度至少8位")
+    if not re.search(r"[A-Za-z]", password):
+        raise ValidationException(detail="密码必须包含字母")
+    if not re.search(r"[0-9]", password):
+        raise ValidationException(detail="密码必须包含数字")
 
 
 class LoginRequest(BaseModel):
@@ -38,24 +80,28 @@ class LoginResponse(BaseModel):
 
 class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=128)
-    password: str = Field(..., min_length=6, max_length=128)
+    password: str = Field(..., min_length=8, max_length=128)
     role: Role = Role.VIEWER
 
 
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., min_length=1, max_length=128)
-    new_password: str = Field(..., min_length=6, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 @router.post("/login", response_model=LoginResponse)
 async def login(data: LoginRequest):
+    _check_login_lockout(data.username)
     user = get_user_by_username(data.username)
     if user is None:
+        _record_failed_login(data.username)
         raise UnauthorizedException(detail="用户名或密码错误")
     if not user.is_active:
         raise UnauthorizedException(detail="用户账号已被停用")
     if not verify_password(data.password, user.hashed_password):
+        _record_failed_login(data.username)
         raise UnauthorizedException(detail="用户名或密码错误")
+    _clear_failed_logins(data.username)
     access_token = create_access_token(user)
     logger.info(f"User logged in: {data.username}")
     return LoginResponse(
@@ -75,6 +121,7 @@ async def register(
     data: RegisterRequest,
     current_user: User = Depends(require_role(Role.ADMIN)),
 ):
+    _validate_password_strength(data.password)
     existing = get_user_by_username(data.username)
     if existing is not None:
         raise ValidationException(detail=f"用户名 '{data.username}' 已存在")
@@ -118,6 +165,7 @@ async def change_password(
         raise ValidationException(detail="当前密码不正确")
     if data.current_password == data.new_password:
         raise ValidationException(detail="新密码不能与当前密码相同")
+    _validate_password_strength(data.new_password)
     update_user_password(current_user.username, data.new_password)
     return {"message": "密码修改成功"}
 

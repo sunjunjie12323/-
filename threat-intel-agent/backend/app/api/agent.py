@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -136,10 +137,17 @@ def register_agent_handlers():
     async def _handle_query(task):
         from app.main import app
         orchestrator = app.state.orchestrator
-        return await orchestrator.execute_query(
-            query=task.params.get("query", ""),
-            context=task.params.get("context"),
-        )
+        try:
+            result = await asyncio.wait_for(
+                orchestrator.execute_query(
+                    query=task.params.get("query", ""),
+                    context=task.params.get("context"),
+                ),
+                timeout=120.0,
+            )
+            return result
+        except asyncio.TimeoutError:
+            return {"status": "error", "error": "查询超时(120s)", "partial_results": None}
 
     async def _handle_collect(task):
         from app.main import app
