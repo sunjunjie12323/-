@@ -288,20 +288,25 @@ async def run_lifecycle_check(
 async def list_organisms(
     species: Optional[str] = None,
     alive_only: bool = True,
+    limit: int = 50,
+    offset: int = 0,
     request: Request = None,
     current_user: User = Depends(get_current_user),
 ):
     engine = getattr(request.app.state, "intelligence_organism", None)
     if not engine:
         raise HTTPException(status_code=503, detail="Intelligence Organism Engine not available")
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
     organisms = list(engine.organisms.values())
     if species:
         organisms = [o for o in organisms if o.species == species]
     if alive_only:
         organisms = [o for o in organisms if o.is_alive]
+    total = len(organisms)
     return {
-        "total": len(organisms),
-        "organisms": [o.to_dict() for o in organisms[:50]],
+        "total": total,
+        "organisms": [o.to_dict() for o in organisms[offset:offset + limit]],
     }
 
 

@@ -77,6 +77,54 @@ class ZeroDayDetector:
     LEARNING_RATE = 0.025
     MIN_COUNT = 1
 
+    _COMMON_ENGLISH_WORDS = frozenset({
+        "the", "be", "to", "of", "and", "a", "in", "that", "have", "i",
+        "it", "for", "not", "on", "with", "he", "as", "you", "do", "at",
+        "this", "but", "his", "by", "from", "they", "we", "say", "her", "she",
+        "or", "an", "will", "my", "one", "all", "would", "there", "their",
+        "what", "so", "up", "out", "if", "about", "who", "get", "which", "go",
+        "me", "when", "make", "can", "like", "time", "no", "just", "him",
+        "know", "take", "people", "into", "year", "your", "good", "some",
+        "could", "them", "see", "other", "than", "then", "now", "look",
+        "only", "come", "its", "over", "think", "also", "back", "after",
+        "use", "two", "how", "our", "work", "first", "well", "way", "even",
+        "new", "want", "because", "any", "these", "give", "day", "most",
+        "us", "is", "are", "was", "were", "been", "has", "had", "did",
+        "does", "am", "being", "very", "much", "more", "such", "each",
+        "own", "should", "may", "must", "might", "still", "through",
+        "where", "while", "here", "between", "both", "under", "never",
+        "same", "another", "much", "before", "off", "too", "down",
+        "really", "need", "right", "long", "big", "high", "old", "small",
+        "large", "next", "early", "young", "important", "few", "public",
+        "bad", "same", "able", "free", "full", "sure", "real", "top",
+        "best", "last", "left", "end", "run", "hand", "high", "place",
+        "case", "week", "system", "plan", "point", "home", "water", "room",
+        "area", "money", "story", "fact", "month", "lot", "right", "study",
+        "book", "eye", "job", "word", "business", "issue", "side", "kind",
+        "head", "house", "service", "friend", "father", "power", "hour",
+        "game", "line", "end", "member", "law", "car", "city", "community",
+        "name", "president", "team", "minute", "idea", "body", "info",
+        "back", "parent", "face", "level", "office", "door", "health",
+        "person", "art", "war", "history", "party", "result", "change",
+        "morning", "reason", "research", "girl", "guy", "moment", "air",
+        "teacher", "force", "education", "foot", "boy", "age", "policy",
+        "process", "music", "market", "sense", "thing", "class", "action",
+        "example", "world", "technology", "data", "code", "network",
+        "security", "attack", "threat", "vulnerability", "exploit", "malware",
+        "crypto", "novel", "zero", "day", "remote", "access", "tool",
+        "server", "client", "web", "application", "software", "hardware",
+        "system", "user", "admin", "root", "shell", "script", "file",
+        "password", "token", "key", "cert", "sign", "log", "event",
+        "alert", "report", "scan", "probe", "check", "test", "debug",
+        "proxy", "tunnel", "port", "host", "domain", "email", "phone",
+        "bank", "card", "account", "payment", "transfer", "wallet",
+        "bitcoin", "ethereum", "block", "chain", "miner", "exchange",
+        "dark", "web", "market", "forum", "chat", "channel", "group",
+        "post", "thread", "message", "link", "site", "page", "search",
+        "download", "upload", "share", "sell", "buy", "price", "cost",
+        "sale", "offer", "deal", "trade", "service", "support", "help",
+    })
+
     def __init__(self, vector_store: VectorStore, blacktalk_engine: BlackTalkEngine):
         self.vector_store = vector_store
         self.blacktalk_engine = blacktalk_engine
@@ -91,8 +139,66 @@ class ZeroDayDetector:
         os.makedirs(self._persist_dir, exist_ok=True)
 
     def _tokenize(self, text: str) -> List[str]:
-        tokens = re.findall(r"[\u4e00-\u9fff]{1,4}|[a-zA-Z]{2,}|[0-9]+", text.lower())
-        return tokens
+        result = []
+        i = 0
+        lower = text.lower()
+        n = len(lower)
+        while i < n:
+            ch = lower[i]
+            if '\u4e00' <= ch <= '\u9fff':
+                chinese_segment = []
+                while i < n and '\u4e00' <= lower[i] <= '\u9fff':
+                    chinese_segment.append(lower[i])
+                    i += 1
+                for j in range(len(chinese_segment) - 1):
+                    result.append(chinese_segment[j] + chinese_segment[j + 1])
+            elif ch.isascii() and ch.isalpha():
+                start = i
+                while i < n and lower[i].isascii() and lower[i].isalpha():
+                    i += 1
+                word = lower[start:i]
+                if len(word) >= 2:
+                    if len(word) < 6:
+                        result.append(word)
+                    else:
+                        sub = self._try_split_compound(word)
+                        if sub and len(sub) > 1:
+                            result.extend(sub)
+                        else:
+                            result.append(word)
+            elif ch.isdigit():
+                while i < n and lower[i].isdigit():
+                    i += 1
+            else:
+                i += 1
+        return result
+
+    def _try_split_compound(self, token: str) -> Optional[List[str]]:
+        if len(token) < 6:
+            return None
+        n = len(token)
+        best_split = None
+        best_score = 0
+        for i in range(2, n - 1):
+            left = token[:i]
+            right = token[i:]
+            if len(left) < 2 or len(right) < 2:
+                continue
+            left_known = left in self._COMMON_ENGLISH_WORDS
+            right_known = right in self._COMMON_ENGLISH_WORDS
+            if left_known and right_known:
+                score = len(left) + len(right)
+                if score > best_score:
+                    best_score = score
+                    best_split = [left, right]
+            elif left_known and len(right) >= 3:
+                sub_right = self._try_split_compound(right)
+                if sub_right and len(sub_right) > 1:
+                    score = len(left) + sum(len(w) for w in sub_right)
+                    if score > best_score:
+                        best_score = score
+                        best_split = [left] + sub_right
+        return best_split
 
     def _build_vocab(self, corpus: List[str]):
         self._word_freq = Counter()
@@ -128,7 +234,7 @@ class ZeroDayDetector:
         freq = freq / freq.sum()
         return np.random.choice(len(freq), size=num_neg, p=freq)
 
-    def train(self, corpus: List[str], epochs: int = 10):
+    def train(self, corpus: List[str], epochs: int = 3):
         if not corpus:
             logger.warning("Empty corpus, skipping training")
             return
@@ -274,6 +380,8 @@ class ZeroDayDetector:
                     continue
                 if ngram.isascii() and len(ngram) < 3:
                     continue
+                if self._is_common_word_combination(tokens[i:i + length]):
+                    continue
 
                 context_anomaly = self._compute_context_anomaly(ngram, text)
                 kl_drift = self._compute_kl_drift(text)
@@ -308,15 +416,92 @@ class ZeroDayDetector:
 
         return unique
 
+    def _is_common_word_combination(self, tokens: List[str]) -> bool:
+        if not tokens or len(tokens) < 2:
+            return False
+        all_common = all(t in self._COMMON_ENGLISH_WORDS for t in tokens)
+        if all_common:
+            return True
+        if len(tokens) == 2:
+            combined = tokens[0] + tokens[1]
+            if combined in self._COMMON_ENGLISH_WORDS:
+                return True
+        return False
+
+    def _detect_chinese_unknown_terms(self, text: str) -> List[Dict]:
+        chinese_segments = re.findall(r'[\u4e00-\u9fff]+', text)
+        if not chinese_segments:
+            return []
+
+        bigrams = []
+        for segment in chinese_segments:
+            for j in range(len(segment) - 1):
+                bigrams.append(segment[j] + segment[j + 1])
+
+        known_terms = set(self.blacktalk_engine._term_index.keys())
+        vocab = set(self._word2idx.keys())
+        candidates = []
+
+        for bigram in bigrams:
+            if bigram in known_terms:
+                continue
+            if bigram in vocab:
+                continue
+
+            context_anomaly = self._compute_context_anomaly(bigram, text) if self._trained else 0.5
+            kl_drift = self._compute_kl_drift(text) if self._trained else 0.0
+
+            confidence = 0.0
+            if bigram not in vocab:
+                confidence += 0.3
+            if context_anomaly > 0.4:
+                confidence += 0.2
+            if kl_drift > self.DRIFT_THRESHOLD:
+                confidence += 0.2
+            if any(kw in text for kw in ["出售", "价格", "佣金", "套现", "跑分", "通道", "接码", "养号", "出", "求购", "招募", "暗网", "变种", "木马", "攻击", "传播"]):
+                confidence += 0.2
+            if context_anomaly > 0.6:
+                confidence += 0.1
+
+            confidence = min(confidence, 1.0)
+
+            if confidence >= self.CONFIDENCE_THRESHOLD:
+                idx = text.find(bigram)
+                ctx = text[max(0, idx - 20):idx + len(bigram) + 20]
+                candidates.append({
+                    "term": bigram,
+                    "confidence": confidence,
+                    "context_anomaly": context_anomaly,
+                    "kl_drift": kl_drift,
+                    "context": ctx,
+                })
+
+        seen = set()
+        unique = []
+        for c in sorted(candidates, key=lambda x: x["confidence"], reverse=True):
+            if c["term"] not in seen:
+                seen.add(c["term"])
+                unique.append(c)
+
+        return unique
+
     async def detect_zero_day_terms(self, text: str) -> List:
         if not self._trained:
             self._try_load_model()
 
         known_terms = set(self.blacktalk_engine._term_index.keys())
         candidates = self._detect_unknown_terms(text)
+        chinese_candidates = self._detect_chinese_unknown_terms(text)
+
+        seen = set()
+        unique_candidates = []
+        for c in sorted(candidates + chinese_candidates, key=lambda x: x["confidence"], reverse=True):
+            if c["term"] not in seen:
+                seen.add(c["term"])
+                unique_candidates.append(c)
 
         results = []
-        for c in candidates:
+        for c in unique_candidates:
             term = c["term"]
             if term in known_terms:
                 continue

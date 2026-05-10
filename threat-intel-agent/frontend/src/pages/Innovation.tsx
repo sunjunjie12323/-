@@ -168,19 +168,19 @@ const ZeroDayTab: React.FC = () => {
 };
 
 const AttackPredictionTab: React.FC = () => {
-  const [entityId, setEntityId] = useState('');
+  const [entityName, setEntityName] = useState('');
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState<any>(null);
 
   const handlePredict = async () => {
-    if (!entityId.trim()) {
-      message.warning('请输入实体ID');
+    if (!entityName.trim()) {
+      message.warning('请输入实体名称');
       return;
     }
     setLoading(true);
     try {
-      const res = await api.attackPrediction.predict(entityId);
-      setPrediction(res);
+      const res = await api.attackPrediction.predictByName(entityName);
+      setPrediction(res.predictions || res);
     } catch (err: any) {
       message.error(err?.message || '攻击预测失败');
     } finally {
@@ -209,9 +209,9 @@ const AttackPredictionTab: React.FC = () => {
       <Card title="攻击链预测">
         <Space.Compact style={{ width: '100%' }}>
           <Input
-            value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
-            placeholder="输入实体ID..."
+            value={entityName}
+            onChange={(e) => setEntityName(e.target.value)}
+            placeholder="输入实体名称（如IP地址、域名等）..."
           />
           <Button type="primary" icon={<ThunderboltOutlined />} onClick={handlePredict} loading={loading}>
             预测攻击路径
@@ -256,23 +256,48 @@ const AttackPredictionTab: React.FC = () => {
 };
 
 const ProvenanceTab: React.FC = () => {
-  const [intelligenceId, setIntelligenceId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [verifyResult, setVerifyResult] = useState<any>(null);
   const [chainData, setChainData] = useState<any>(null);
   const [hallucinationLoading, setHallucinationLoading] = useState(false);
   const [hallucinationResult, setHallucinationResult] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [resolvedIntelligenceId, setResolvedIntelligenceId] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      message.warning('请输入搜索内容');
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await api.provenance.searchByContent(searchQuery);
+      setSearchResults(res.results || []);
+      if (res.results && res.results.length > 0) {
+        const firstId = res.results[0].intelligence_id;
+        setResolvedIntelligenceId(firstId);
+      }
+    } catch (err: any) {
+      message.error(err?.message || '搜索失败');
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   const handleVerify = async () => {
-    if (!intelligenceId.trim()) {
-      message.warning('请输入情报ID');
+    const intelId = resolvedIntelligenceId;
+    if (!intelId) {
+      message.warning('请先搜索选择情报');
       return;
     }
     setLoading(true);
     try {
       const [verifyRes, chainRes] = await Promise.all([
-        api.provenance.verify(intelligenceId),
-        api.provenance.chain(intelligenceId),
+        api.provenance.verify(intelId),
+        api.provenance.chain(intelId),
       ]);
       setVerifyResult(verifyRes);
       setChainData(chainRes);
@@ -284,13 +309,14 @@ const ProvenanceTab: React.FC = () => {
   };
 
   const handleHallucinationCheck = async () => {
-    if (!intelligenceId.trim()) {
-      message.warning('请输入情报ID');
+    const intelId = resolvedIntelligenceId;
+    if (!intelId) {
+      message.warning('请先搜索选择情报');
       return;
     }
     setHallucinationLoading(true);
     try {
-      const res = await api.provenance.hallucinationCheck(intelligenceId);
+      const res = await api.provenance.hallucinationCheck(intelId);
       setHallucinationResult(res);
     } catch (err: any) {
       message.error(err?.message || '幻觉检测失败');
@@ -311,19 +337,56 @@ const ProvenanceTab: React.FC = () => {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Card title="情报溯源链验证">
-        <Space>
-          <Input
-            value={intelligenceId}
-            onChange={(e) => setIntelligenceId(e.target.value)}
-            placeholder="输入情报ID..."
-            style={{ width: 300 }}
-          />
-          <Button type="primary" icon={<LinkOutlined />} onClick={handleVerify} loading={loading}>
-            验证溯源链
-          </Button>
-          <Button onClick={handleHallucinationCheck} loading={hallucinationLoading}>
-            幻觉检测
-          </Button>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="输入情报内容/描述关键词搜索..."
+              onPressEnter={handleSearch}
+            />
+            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch} loading={searchLoading}>
+              搜索
+            </Button>
+          </Space.Compact>
+          {searchResults.length > 0 && (
+            <div>
+              <Text type="secondary">搜索结果（点击选择）：</Text>
+              <div style={{ marginTop: 8 }}>
+                {searchResults.map((r: any, idx: number) => (
+                  <Card
+                    key={idx}
+                    size="small"
+                    style={{
+                      marginBottom: 8,
+                      cursor: 'pointer',
+                      border: resolvedIntelligenceId === r.intelligence_id ? '2px solid #1890ff' : undefined,
+                    }}
+                    onClick={() => setResolvedIntelligenceId(r.intelligence_id)}
+                  >
+                    <Space direction="vertical" size={0}>
+                      <Space>
+                        <Tag color="blue">{r.stage}</Tag>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{r.intelligence_id.substring(0, 16)}...</Text>
+                      </Space>
+                      <Text ellipsis style={{ maxWidth: 500 }}>{r.snippet}</Text>
+                    </Space>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+          {resolvedIntelligenceId && (
+            <Space>
+              <Text>已选择: <Text code>{resolvedIntelligenceId.substring(0, 16)}...</Text></Text>
+              <Button type="primary" icon={<LinkOutlined />} onClick={handleVerify} loading={loading}>
+                验证溯源链
+              </Button>
+              <Button onClick={handleHallucinationCheck} loading={hallucinationLoading}>
+                幻觉检测
+              </Button>
+            </Space>
+          )}
         </Space>
       </Card>
 
@@ -388,19 +451,26 @@ const ProvenanceTab: React.FC = () => {
 };
 
 const AttributionTab: React.FC = () => {
-  const [entityId, setEntityId] = useState('');
+  const [entityName, setEntityName] = useState('');
   const [fingerprintLoading, setFingerprintLoading] = useState(false);
   const [fingerprint, setFingerprint] = useState<any>(null);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matches, setMatches] = useState<any[]>([]);
 
   const handleFingerprint = async () => {
-    if (!entityId.trim()) {
-      message.warning('请输入实体ID');
+    if (!entityName.trim()) {
+      message.warning('请输入实体名称');
       return;
     }
     setFingerprintLoading(true);
     try {
+      const searchRes = await api.attackPrediction.predictByName(entityName).catch(() => null);
+      const entityId = searchRes?.entity_id;
+      if (!entityId) {
+        message.error('未找到该实体，请检查名称');
+        setFingerprintLoading(false);
+        return;
+      }
       const res = await api.attribution.fingerprint(entityId);
       setFingerprint(res);
     } catch (err: any) {
@@ -411,13 +481,13 @@ const AttributionTab: React.FC = () => {
   };
 
   const handleFindSame = async () => {
-    if (!entityId.trim()) {
-      message.warning('请输入实体ID');
+    if (!entityName.trim()) {
+      message.warning('请输入实体名称');
       return;
     }
     setMatchesLoading(true);
     try {
-      const res = await api.attribution.findSame(entityId);
+      const res = await api.attribution.findSameByName(entityName);
       setMatches(res.matches || res.results || []);
     } catch (err: any) {
       message.error(err?.message || '同源查找失败');
@@ -433,9 +503,9 @@ const AttributionTab: React.FC = () => {
       <Card title="跨平台归因分析">
         <Space>
           <Input
-            value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
-            placeholder="输入实体ID..."
+            value={entityName}
+            onChange={(e) => setEntityName(e.target.value)}
+            placeholder="输入实体名称（如IP地址、域名等）..."
             style={{ width: 300 }}
           />
           <Button type="primary" icon={<ForkOutlined />} onClick={handleFingerprint} loading={fingerprintLoading}>

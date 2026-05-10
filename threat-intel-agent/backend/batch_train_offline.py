@@ -1644,19 +1644,19 @@ async def main():
     )
 
     species_map = {
-        "cisa_kev": "vulnerability",
+        "cisa_kev": "ttp",
         "malware_bazaar": "ttp",
         "alienvault_otx": "campaign",
         "urlhaus": "domain",
         "otx_indicator": "ip",
-        "ransomware_watch": "ransomware",
-        "breach_tracker": "breach",
-        "phish_tracker": "phishing",
-        "darkweb_monitor": "darkweb",
-        "crypto_tracker": "crypto",
-        "botnet_tracker": "botnet",
-        "supply_chain_monitor": "supply_chain",
-        "zeroday_tracker": "zeroday",
+        "ransomware_watch": "organization",
+        "breach_tracker": "organization",
+        "phish_tracker": "campaign",
+        "darkweb_monitor": "domain",
+        "crypto_tracker": "bankcard",
+        "botnet_tracker": "ttp",
+        "supply_chain_monitor": "campaign",
+        "zeroday_tracker": "ttp",
     }
 
     organism_count = 0
@@ -1670,19 +1670,17 @@ async def main():
                 intelligence_id=intel_id,
                 species=species,
                 initial_data=item["metadata"],
+                skip_save=True,
             )
             organism_count += 1
         except Exception:
             pass
 
+    await organism_engine.save_to_disk()
     print(f"  ✅ IntelligenceOrganism: {organism_count} 个生命体已生成")
 
-    lifecycle_result = await organism_engine.run_lifecycle_check()
-    print(f"    生命周期检查: {lifecycle_result}")
-
     alive = sum(1 for o in organism_engine.organisms.values() if o.is_alive)
-    dead = sum(1 for o in organism_engine.organisms.values() if not o.is_alive)
-    print(f"    存活: {alive}, 死亡: {dead}")
+    print(f"    存活: {alive} (全部应为存活状态，刚创建)")
 
     species_dist = {}
     for o in organism_engine.organisms.values():

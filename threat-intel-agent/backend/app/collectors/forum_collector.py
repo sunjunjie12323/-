@@ -18,7 +18,7 @@ class ForumCollector:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=30)
+            timeout = aiohttp.ClientTimeout(total=5)
             headers = {"User-Agent": "ThreatIntelAgent/1.0"}
             if self._otx_key:
                 headers["X-OTX-API-KEY"] = self._otx_key

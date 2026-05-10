@@ -21,6 +21,11 @@ class SimulateRequest(BaseModel):
     steps: int = Field(default=5, ge=1, le=20)
 
 
+class PredictByNameRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    depth: int = Field(default=3, ge=1, le=10)
+
+
 class EarlyWarningRequest(BaseModel):
     entity_id: str = Field(..., min_length=1)
 
@@ -47,6 +52,44 @@ async def predict_next_steps(
         raise HTTPException(status_code=504, detail="Attack prediction timed out")
     except Exception as exc:
         logger.error(f"Attack prediction failed for entity '{data.entity_id}': {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/predict-by-name")
+async def predict_by_name(
+    data: PredictByNameRequest,
+    request: Request,
+    current_user: User = Depends(require_role(Role.ADMIN, Role.ANALYST)),
+):
+    kg = request.app.state.knowledge_graph
+    entity = None
+    for e in kg._entities.values():
+        if e.value.lower() == data.name.lower():
+            entity = e
+            break
+    if not entity:
+        results = await kg.search_entities(data.name, limit=1)
+        if results:
+            entity = results[0]
+    if not entity:
+        raise HTTPException(status_code=404, detail=f"Entity not found: {data.name}")
+    entity_id = entity.id
+    predictor = get_attack_chain_predictor(request)
+    try:
+        result = await asyncio.wait_for(
+            predictor.predict_next_steps(entity_id, depth=data.depth),
+            timeout=60,
+        )
+        return {
+            "entity_id": entity_id,
+            "entity_name": entity.value,
+            "predictions": result.to_dict(),
+        }
+    except asyncio.TimeoutError:
+        logger.error(f"Attack prediction timed out for entity '{entity_id}'")
+        raise HTTPException(status_code=504, detail="Attack prediction timed out")
+    except Exception as exc:
+        logger.error(f"Attack prediction failed for entity '{entity_id}': {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 

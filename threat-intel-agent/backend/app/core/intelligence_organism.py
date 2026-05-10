@@ -258,7 +258,7 @@ class IntelligenceOrganismEngine:
                 logger.error(f"Failed to save organism data to disk: {exc}")
 
     async def spawn_organism(
-        self, intelligence_id: str, species: str, initial_data: Dict
+        self, intelligence_id: str, species: str, initial_data: Dict, skip_save: bool = False
     ) -> IntelligenceOrganism:
         now = datetime.now(timezone.utc)
         born_at = now.isoformat()
@@ -323,11 +323,12 @@ class IntelligenceOrganismEngine:
             f"Spawned organism {intelligence_id} (species={species}, "
             f"generation={organism.generation}, vitality={organism.vitality:.2f})"
         )
-        await self.save_to_disk()
+        if not skip_save:
+            await self.save_to_disk()
         return organism
 
     async def evolve(
-        self, organism_id: str, new_data: Dict, trigger: str = "auto_monitor"
+        self, organism_id: str, new_data: Dict, trigger: str = "auto_monitor", skip_save: bool = False
     ) -> IntelligenceOrganism:
         organism = self.organisms.get(organism_id)
         if not organism:
@@ -388,7 +389,8 @@ class IntelligenceOrganismEngine:
             f"Evolved organism {organism_id}: vitality={organism.vitality:.3f}, "
             f"mutated={has_significant_change}, trigger={trigger}"
         )
-        await self.save_to_disk()
+        if not skip_save:
+            await self.save_to_disk()
         return organism
 
     async def check_vitality(self, organism_id: str) -> VitalityReport:
@@ -414,8 +416,11 @@ class IntelligenceOrganismEngine:
 
         freshness = 0.5 ** (age_hours / organism.half_life) if organism.half_life > 0 else 0.0
 
-        expected_mentions = EXPECTED_MENTIONS_PER_HOUR.get(organism.species, 0.01) * age_hours
-        activity = min(organism.mention_count / max(expected_mentions, 1), 1.0) if expected_mentions > 0 else 0.0
+        if age_hours < 1.0:
+            activity = 1.0
+        else:
+            expected_mentions = EXPECTED_MENTIONS_PER_HOUR.get(organism.species, 0.01) * age_hours
+            activity = min(organism.mention_count / max(expected_mentions, 1), 1.0) if expected_mentions > 0 else 0.5
 
         relevance = 0.5
         if organism.total_use_count > 0:
@@ -741,7 +746,7 @@ class IntelligenceOrganismEngine:
         )
 
     async def archive_organism(
-        self, organism_id: str, cause: str = "expired"
+        self, organism_id: str, cause: str = "expired", skip_save: bool = False
     ) -> IntelligenceGene:
         organism = self.organisms.get(organism_id)
         if not organism:
@@ -789,7 +794,8 @@ class IntelligenceOrganismEngine:
             f"Archived organism {organism_id}, preserved gene {gene.gene_id} "
             f"({len(patterns)} patterns, {len(associations)} associations)"
         )
-        await self.save_to_disk()
+        if not skip_save:
+            await self.save_to_disk()
         return gene
 
     async def inherit_genes(self, new_organism_id: str, parent_genes: List[str]) -> Dict:

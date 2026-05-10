@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from collections import Counter, defaultdict
@@ -50,6 +51,30 @@ class AttributionResult:
             "target_platform": self.target_platform,
             "evidence": self.evidence,
             "confidence": self.confidence,
+        }
+
+
+@dataclass
+class BehavioralFingerprint:
+    entity_id: str
+    entity_type: str
+    entity_value: str
+    embedding: Optional[List[float]] = None
+    behavioral_features: Dict[str, float] = field(default_factory=dict)
+    fingerprint_hash: str = ""
+    platforms: List[str] = field(default_factory=list)
+    created_at: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "entity_id": self.entity_id,
+            "entity_type": self.entity_type,
+            "entity_value": self.entity_value,
+            "embedding": self.embedding,
+            "behavioral_features": self.behavioral_features,
+            "fingerprint_hash": self.fingerprint_hash,
+            "platforms": self.platforms,
+            "created_at": self.created_at,
         }
 
 
@@ -397,16 +422,47 @@ class EntityAttribution:
             features["dominant_relation_ratio"] = float(relation_types.most_common(1)[0][1]) / max(sum(relation_types.values()), 1)
         return features
 
-    def compute_behavioral_fingerprint(self, entity_id: str) -> str:
-        features = self._compute_behavioral_features(entity_id)
-        if not features:
-            return ""
-        fingerprint_str = json.dumps(features, sort_keys=True)
-        import hashlib
-        return hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+    async def compute_behavioral_fingerprint(self, entity_id: str) -> BehavioralFingerprint:
+        if self._model is None:
+            self._try_load_model()
 
-    async def find_same_entity(self, entity_id: str) -> List[AttributionResult]:
-        return await self.attribute_entity(entity_id, threshold=0.8)
+        resolved_id = entity_id
+        if self._model is not None and resolved_id not in self._entity2idx:
+            if entity_id.lower() in self._name2id:
+                resolved_id = self._name2id[entity_id.lower()]
+
+        entity = await self.knowledge_graph.get_entity(resolved_id)
+        entity_type = "unknown"
+        entity_value = entity_id
+        platforms = []
+        if entity:
+            entity_type = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
+            entity_value = entity.value
+            platforms = [self._infer_platform(entity_type)]
+
+        features = self._compute_behavioral_features(resolved_id)
+
+        embedding = None
+        if self._model is not None and resolved_id in self._entity2idx:
+            emb = self._model.get_entity_embedding(self._entity2idx[resolved_id])
+            embedding = emb.tolist()
+
+        fingerprint_str = json.dumps(features, sort_keys=True)
+        fingerprint_hash = hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+
+        return BehavioralFingerprint(
+            entity_id=resolved_id,
+            entity_type=entity_type,
+            entity_value=entity_value,
+            embedding=embedding,
+            behavioral_features=features,
+            fingerprint_hash=fingerprint_hash,
+            platforms=platforms,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    async def find_same_entity(self, entity_id: str, threshold: float = 0.8) -> List[AttributionResult]:
+        return await self.attribute_entity(entity_id, threshold=threshold)
 
     async def generate_attribution_report(self, entity_id: str) -> Dict:
         profile = await self.build_entity_profile(entity_id)

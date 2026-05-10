@@ -140,7 +140,7 @@ class LocalEmbeddingEngine:
     def _fallback_embed(self, text: str) -> List[float]:
         import hashlib as _hashlib
         h = _hashlib.sha256(text.encode("utf-8")).digest()
-        seed = int.from_bytes(h[:8], "big")
+        seed = int.from_bytes(h[:4], "big")
         rng = np.random.RandomState(seed)
         vec = rng.randn(self.dim).astype(np.float32)
         norm = np.linalg.norm(vec)

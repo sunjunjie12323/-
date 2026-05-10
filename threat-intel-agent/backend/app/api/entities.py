@@ -1,6 +1,7 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import User, get_current_user, require_role, Role
@@ -42,16 +43,45 @@ async def list_entities(
 
 @router.get("/search", response_model=dict)
 async def search_entities(
-    q: str = Query(..., min_length=1),
+    q: Optional[str] = Query(None, min_length=1),
+    query_param: Optional[str] = Query(None, min_length=1, alias="query"),
     entity_type: EntityType | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    search_query = q or query_param
+    if not search_query:
+        raise HTTPException(status_code=422, detail="Either 'q' or 'query' parameter is required")
+
+    vector_store = request.app.state.vector_store
+    try:
+        vs_results = await vector_store.search(
+            query=search_query,
+            n_results=limit,
+            collection="intelligence",
+        )
+        if vs_results:
+            items = []
+            for r in vs_results:
+                metadata = r.get("metadata", {})
+                items.append({
+                    "id": r.get("id", ""),
+                    "type": metadata.get("type", "unknown"),
+                    "value": metadata.get("value", ""),
+                    "document": r.get("document", ""),
+                    "metadata": metadata,
+                    "distance": r.get("distance"),
+                })
+            return {"items": items, "total": len(items), "offset": offset, "limit": limit}
+    except Exception as exc:
+        logger.warning(f"VectorStore search failed, falling back to DB: {exc}")
+
     crud = EntityCRUD(db)
     items, total = await crud.search_entities(
-        query=q, entity_type=entity_type, offset=offset, limit=limit
+        query=search_query, entity_type=entity_type, offset=offset, limit=limit
     )
     await db.commit()
     return {"items": items, "total": total, "offset": offset, "limit": limit}

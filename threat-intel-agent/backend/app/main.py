@@ -203,6 +203,41 @@ async def _initialize_services(app: FastAPI):
     app.state.provenance_chain = provenance_chain
     logger.info("ProvenanceChain created (SHA-256 cryptographic chain + N-gram hallucination detection)")
 
+    try:
+        from app.db.database import async_session_factory
+        from app.db.tables import RawIntelligenceTable, CleanedIntelligenceTable, AnalyzedIntelligenceTable
+        from sqlalchemy import select
+        async with async_session_factory() as session:
+            intel_items = []
+            raw_result = await session.execute(select(RawIntelligenceTable).limit(50))
+            for row in raw_result.scalars().all():
+                intel_items.append({
+                    "id": row.id,
+                    "source": row.source,
+                    "content": row.content or "",
+                    "type": "raw",
+                })
+            cleaned_result = await session.execute(select(CleanedIntelligenceTable).limit(50))
+            for row in cleaned_result.scalars().all():
+                intel_items.append({
+                    "id": row.id,
+                    "source": "cleaned",
+                    "content": row.content or "",
+                    "type": "cleaned",
+                })
+            analyzed_result = await session.execute(select(AnalyzedIntelligenceTable).limit(50))
+            for row in analyzed_result.scalars().all():
+                intel_items.append({
+                    "id": row.id,
+                    "source": "analyzed",
+                    "content": row.analysis_summary or "",
+                    "type": "analyzed",
+                })
+        if intel_items:
+            await provenance_chain.ensure_provenance_for_intelligence(intel_items)
+    except Exception as exc:
+        logger.warning(f"ProvenanceChain auto-generation skipped: {exc}")
+
     entity_attribution = EntityAttribution(vector_store=vector_store, knowledge_graph=knowledge_graph)
     app.state.entity_attribution = entity_attribution
     logger.info("EntityAttribution created (TransE knowledge graph embedding)")
@@ -260,6 +295,13 @@ async def _shutdown_services(app: FastAPI):
             logger.info("IntelligenceOrganism data saved")
         except Exception as exc:
             logger.warning(f"Failed to save IntelligenceOrganism data: {exc}")
+
+    if hasattr(app.state, "provenance_chain"):
+        try:
+            app.state.provenance_chain.save_to_disk()
+            logger.info("ProvenanceChain data saved")
+        except Exception as exc:
+            logger.warning(f"Failed to save ProvenanceChain data: {exc}")
 
     if hasattr(app.state, "vector_store"):
         try:
@@ -323,7 +365,9 @@ async def lifespan(app: FastAPI):
     try:
         from app.db.seed import fix_seed_sources, seed_from_real_data
         await fix_seed_sources()
-        await seed_from_real_data()
+        await asyncio.wait_for(seed_from_real_data(), timeout=15.0)
+    except asyncio.TimeoutError:
+        logger.warning("Seed from real data timed out (15s), skipping. Batch training data is available.")
     except Exception as exc:
         logger.warning(f"Seed operations skipped: {exc}")
 

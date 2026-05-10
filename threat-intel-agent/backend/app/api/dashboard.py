@@ -55,10 +55,14 @@ async def get_dashboard_stats(
     except Exception:
         pass
 
-    blacktalk_count = 0
+    blacktalk_stats: Dict = {"total_terms": 0, "categories": {}}
     try:
         bt_terms = await bt.get_all()
         blacktalk_count = len(bt_terms)
+        category_counts: Dict[str, int] = {}
+        for t in bt_terms:
+            category_counts[t.category] = category_counts.get(t.category, 0) + 1
+        blacktalk_stats = {"total_terms": blacktalk_count, "categories": category_counts}
     except Exception:
         pass
 
@@ -208,16 +212,29 @@ async def get_dashboard_stats(
     except Exception as exc:
         logger.warning(f"Failed to get agent status: {exc}")
 
+    organism_stats: Dict = {"total": 0, "alive": 0}
+    try:
+        organism_engine = request.app.state.intelligence_organism
+        all_organisms = list(organism_engine.organisms.values())
+        organism_stats = {
+            "total": len(all_organisms),
+            "alive": sum(1 for o in all_organisms if o.is_alive),
+        }
+    except Exception:
+        pass
+
     return {
         "total_intelligence": total_intelligence,
+        "knowledge_graph": {"node_count": graph_node_count, "edge_count": graph_edge_count},
+        "blacktalk": blacktalk_stats,
         "active_pirs": active_pir_count,
         "threat_alerts": threat_alert_count,
-        "graph_nodes": graph_node_count,
         "threat_level_distribution": threat_level_distribution,
         "source_type_distribution": source_type_distribution,
         "recent_intelligence": recent_intelligence,
         "agent_statuses": agent_statuses,
         "recent_executions": recent_executions,
+        "organism_stats": organism_stats,
     }
 
 

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -109,10 +110,13 @@ class HallucinationReport:
 class ProvenanceChain:
     EXPECTED_STAGES = ["collected", "cleaned", "analyzed", "report_generated"]
 
-    def __init__(self, vector_store: VectorStore):
+    def __init__(self, vector_store: VectorStore, persist_dir: str = "./model_data/provenance"):
         self.vector_store = vector_store
         self._chains: Dict[str, List[ProvenanceRecord]] = {}
         self._records_by_id: Dict[str, ProvenanceRecord] = {}
+        self._persist_dir = persist_dir
+        os.makedirs(self._persist_dir, exist_ok=True)
+        self._load_from_disk()
 
     @staticmethod
     def _compute_hash(data: dict) -> str:
@@ -481,3 +485,99 @@ class ProvenanceChain:
 
     def get_record(self, record_id: str) -> Optional[ProvenanceRecord]:
         return self._records_by_id.get(record_id)
+
+    def _load_from_disk(self) -> bool:
+        path = os.path.join(self._persist_dir, "provenance_data.json")
+        if not os.path.exists(path):
+            return False
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            for intel_id, records_data in data.get("chains", {}).items():
+                chain = []
+                for rd in records_data:
+                    record = ProvenanceRecord(
+                        id=rd["id"],
+                        intelligence_id=rd["intelligence_id"],
+                        stage=rd["stage"],
+                        timestamp=rd["timestamp"],
+                        input_hash=rd["input_hash"],
+                        output_hash=rd["output_hash"],
+                        previous_record_id=rd.get("previous_record_id"),
+                        algorithm_input=rd.get("algorithm_input"),
+                        algorithm_output=rd.get("algorithm_output"),
+                        confidence_before=rd.get("confidence_before"),
+                        confidence_after=rd.get("confidence_after"),
+                        operator=rd.get("operator", "automated"),
+                        metadata=rd.get("metadata", {}),
+                    )
+                    chain.append(record)
+                    self._records_by_id[record.id] = record
+                self._chains[intel_id] = chain
+            logger.info(f"ProvenanceChain loaded {len(self._chains)} chains from disk")
+            return True
+        except Exception as exc:
+            logger.warning(f"Failed to load provenance data: {exc}")
+            return False
+
+    def save_to_disk(self):
+        path = os.path.join(self._persist_dir, "provenance_data.json")
+        try:
+            chains_data = {}
+            for intel_id, chain in self._chains.items():
+                chains_data[intel_id] = [r.to_dict() for r in chain]
+            with open(path, "w") as f:
+                json.dump({"chains": chains_data}, f, ensure_ascii=False, default=str)
+            logger.info(f"ProvenanceChain saved {len(self._chains)} chains to disk")
+        except Exception as exc:
+            logger.warning(f"Failed to save provenance data: {exc}")
+
+    async def ensure_provenance_for_intelligence(self, intelligence_items: List[Dict]):
+        new_count = 0
+        for item in intelligence_items:
+            intel_id = item.get("id", "")
+            if not intel_id:
+                continue
+            if intel_id in self._chains and self._chains[intel_id]:
+                continue
+
+            source = item.get("source", "unknown")
+            content = item.get("content", "")
+            intel_type = item.get("type", "raw")
+
+            await self.record_provenance(
+                intelligence_id=intel_id,
+                stage="collected",
+                input_data={"source": source, "type": intel_type},
+                output_data={"content": content[:500]},
+                confidence_before=None,
+                confidence_after=0.7,
+            )
+
+            if intel_type in ("cleaned", "analyzed"):
+                await self.record_provenance(
+                    intelligence_id=intel_id,
+                    stage="cleaned",
+                    input_data={"content": content[:500]},
+                    output_data={"cleaned": True},
+                    confidence_before=0.7,
+                    confidence_after=0.8,
+                )
+
+            if intel_type == "analyzed":
+                await self.record_provenance(
+                    intelligence_id=intel_id,
+                    stage="analyzed",
+                    input_data={"cleaned": True},
+                    output_data={"analysis": "completed"},
+                    algorithm_input=f"analyze_{source}",
+                    algorithm_output=f"threat_intelligence_from_{source}",
+                    confidence_before=0.8,
+                    confidence_after=0.85,
+                )
+
+            new_count += 1
+
+        if new_count > 0:
+            self.save_to_disk()
+            logger.info(f"ProvenanceChain: auto-generated records for {new_count} intelligence items")

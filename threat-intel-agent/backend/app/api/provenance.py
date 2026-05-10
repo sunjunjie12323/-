@@ -1,7 +1,8 @@
 import asyncio
+import json
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -121,6 +122,36 @@ async def detect_hallucination(
     except Exception as exc:
         logger.error(f"Hallucination check failed for intelligence '{intelligence_id}': {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/search-by-content")
+async def search_by_content(
+    query: str = Query(..., min_length=1),
+    limit: int = Query(default=10, ge=1, le=50),
+    request: Request = None,
+    current_user: User = Depends(get_current_user),
+):
+    chain = get_provenance_chain(request)
+    query_lower = query.lower()
+    matched = []
+    for intel_id, records in chain._chains.items():
+        for record in records:
+            input_text = json.dumps(record.metadata.get("input_data", {}), ensure_ascii=False, default=str).lower()
+            output_text = json.dumps(record.metadata.get("output_data", {}), ensure_ascii=False, default=str).lower()
+            algo_input = (record.algorithm_input or "").lower()
+            algo_output = (record.algorithm_output or "").lower()
+            if query_lower in input_text or query_lower in output_text or query_lower in algo_input or query_lower in algo_output:
+                matched.append({
+                    "intelligence_id": intel_id,
+                    "stage": record.stage,
+                    "timestamp": record.timestamp,
+                    "snippet": (record.algorithm_output or json.dumps(record.metadata.get("output_data", {}), ensure_ascii=False, default=str))[:200],
+                })
+                break
+    matched = matched[:limit]
+    if not matched:
+        raise HTTPException(status_code=404, detail=f"No intelligence found matching: {query}")
+    return {"query": query, "results": matched, "total": len(matched)}
 
 
 @router.get("/chain/{intelligence_id}")

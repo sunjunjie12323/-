@@ -62,6 +62,29 @@ class VectorStore:
             logger.error(f"Failed to add intelligence vector {intel_id}: {exc}")
             raise
 
+    async def search(
+        self,
+        query: str,
+        n_results: int = 10,
+        collection: str = "intelligence",
+        filter: Optional[dict] = None,
+    ) -> List[dict]:
+        col = self._get_collection(collection)
+        try:
+            query_embedding = await self._embed(query)
+            kwargs = {
+                "query_embeddings": [query_embedding],
+                "n_results": n_results,
+            }
+            if filter:
+                kwargs["where"] = filter
+            async with self._lock:
+                results = col.query(**kwargs)
+            return self._format_results(results)
+        except Exception as exc:
+            logger.error(f"Failed to search {collection}: {exc}")
+            return []
+
     async def search_intelligence(
         self,
         query: str,

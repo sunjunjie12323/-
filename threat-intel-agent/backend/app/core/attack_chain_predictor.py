@@ -180,7 +180,7 @@ class AttackChainPredictor:
     MAX_BFS_DEPTH = 4
     MAX_NEIGHBORS = 20
     PATTERN_MIN_LENGTH = 2
-    SMOOTHING_ALPHA = 1.0
+    SMOOTHING_ALPHA = 0.1
 
     def __init__(self, vector_store: VectorStore, knowledge_graph: KnowledgeGraph):
         self.vector_store = vector_store
@@ -326,11 +326,26 @@ class AttackChainPredictor:
             if not techniques:
                 continue
 
-            technique_prob = tactic_prob / max(len(techniques), 1)
-            top_techniques = sorted(techniques, key=lambda x: {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(x[1]["risk"], 4))[:3]
+            risk_weights = {"critical": 4.0, "high": 3.0, "medium": 2.0, "low": 1.0}
+            technique_scores = []
+            for tid, tinfo in techniques:
+                risk = tinfo.get("risk", "medium")
+                base_weight = risk_weights.get(risk, 1.0)
+                graph_boost = 0.0
+                tc = self._technique_counts.get(tactic, {})
+                for rel_type, count in tc.items():
+                    if rel_type and rel_type.lower() in tinfo["name"].lower():
+                        graph_boost += count * 0.5
+                score = base_weight + graph_boost
+                technique_scores.append((tid, tinfo, score))
 
-            for tid, tinfo in top_techniques:
-                combined_prob = tactic_prob * (1.0 / len(top_techniques))
+            total_score = sum(s for _, _, s in technique_scores)
+            technique_scores.sort(key=lambda x: x[2], reverse=True)
+            top_techniques = technique_scores[:3]
+
+            for tid, tinfo, score in top_techniques:
+                technique_prob = score / total_score if total_score > 0 else 1.0 / len(top_techniques)
+                combined_prob = tactic_prob * technique_prob
                 combined_prob = min(combined_prob, 1.0)
 
                 for pattern in patterns:

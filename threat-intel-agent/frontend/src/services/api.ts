@@ -452,6 +452,10 @@ export const api = {
       const { data } = await apiClient.post('/attack-prediction/predict', { entity_id: entityId, depth });
       return data;
     },
+    predictByName: async (name: string, depth: number = 3) => {
+      const { data } = await apiClient.post('/attack-prediction/predict-by-name', { name, depth });
+      return data;
+    },
     simulate: async (entityId: string, steps: number = 5) => {
       const { data } = await apiClient.post('/attack-prediction/simulate', { entity_id: entityId, steps });
       return data;
@@ -482,6 +486,10 @@ export const api = {
       const { data } = await apiClient.get(`/provenance/chain/${intelligenceId}`);
       return data;
     },
+    searchByContent: async (query: string, limit: number = 10) => {
+      const { data } = await apiClient.get('/provenance/search-by-content', { params: { query, limit } });
+      return data;
+    },
   },
   attribution: {
     fingerprint: async (entityId: string) => {
@@ -489,7 +497,11 @@ export const api = {
       return data;
     },
     findSame: async (entityId: string, threshold: number = 0.7) => {
-      const { data } = await apiClient.post(`/attribution/find-same/${entityId}?threshold=${threshold}`);
+      const { data } = await apiClient.get(`/attribution/find-same/${entityId}?threshold=${threshold}`);
+      return data;
+    },
+    findSameByName: async (name: string, threshold: number = 0.7) => {
+      const { data } = await apiClient.get(`/attribution/find-same-by-name/${encodeURIComponent(name)}?threshold=${threshold}`);
       return data;
     },
     report: async (entityId: string) => {
