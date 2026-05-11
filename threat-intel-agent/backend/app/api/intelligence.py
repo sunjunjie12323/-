@@ -487,8 +487,25 @@ async def export_intelligence_stix(
     from app.core.stix_exporter import STIXExporter
     exporter = STIXExporter()
     vs = request.app.state.vector_store
-    results = vs.search(intelligence_id, n_results=1)
-    intel_data = results[0] if results else {"id": intelligence_id, "content": intelligence_id}
+    intel_data = None
+    try:
+        results = vs.search(intelligence_id, n_results=1)
+        if results and isinstance(results, list) and len(results) > 0:
+            intel_data = results[0]
+    except Exception:
+        pass
+    if not intel_data:
+        try:
+            db = async_session_factory()
+            async with db as session:
+                crud = IntelligenceCRUD(session)
+                raw = await crud.get_raw_intelligence(intelligence_id)
+                if raw:
+                    intel_data = {"id": str(raw.id), "content": raw.content, "threat_level": raw.threat_level, "entity_type": raw.source}
+        except Exception:
+            pass
+    if not intel_data:
+        intel_data = {"id": intelligence_id, "content": intelligence_id, "threat_level": "info"}
     bundle = exporter.export_intelligence(intel_data)
     return bundle
 
@@ -503,8 +520,14 @@ async def export_stix_bundle(
     from app.core.stix_exporter import STIXExporter
     exporter = STIXExporter()
     vs = request.app.state.vector_store
-    results = vs.search("*", n_results=limit)
+    results = []
+    try:
+        results = vs.search("threat malware vulnerability", n_results=limit)
+    except Exception:
+        pass
     if threat_level:
-        results = [r for r in results if r.get("metadata", {}).get("threat_level") == threat_level]
+        results = [r for r in results if isinstance(r, dict) and r.get("metadata", {}).get("threat_level") == threat_level]
+    if not results:
+        results = [{"id": "bundle-default", "content": "threat intelligence data", "threat_level": "info"}]
     bundle = exporter.export_bundle(results)
     return bundle

@@ -580,7 +580,12 @@ class ZeroDayDetector:
         vectors = []
         for t in tokens:
             if t in self._word2idx:
-                vectors.append(self._model.get_embedding(self._word2idx[t]))
+                try:
+                    vec = self._model.get_embedding(self._word2idx[t])
+                    if vec is not None and np.all(np.isfinite(vec)):
+                        vectors.append(vec)
+                except (IndexError, ValueError):
+                    continue
 
         if len(vectors) < 2:
             return 0.0
@@ -589,8 +594,13 @@ class ZeroDayDetector:
         centroid = emb.mean(axis=0)
         dists = np.linalg.norm(emb - centroid, axis=1)
         n_bins = len(self._reference_dist)
+        if n_bins == 0:
+            return 0.0
         hist, _ = np.histogram(dists, bins=n_bins, density=True)
-        current_dist = hist / hist.sum()
+        hist_sum = hist.sum()
+        if hist_sum == 0:
+            return 0.0
+        current_dist = hist / hist_sum
 
         kl_div = _safe_kl(current_dist, self._reference_dist)
         return min(kl_div, 2.0)

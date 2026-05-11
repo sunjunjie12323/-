@@ -280,17 +280,20 @@ class AttackChainPredictor:
 
     def _get_transition_prob(self, from_tactic: str, to_tactic: str) -> float:
         from_counts = self._transition_counts.get(from_tactic, {})
-        total = sum(from_counts.values())
-        if total == 0:
-            prior = MITRE_TRANSITIONS.get(from_tactic, {}).get(to_tactic, 0.01)
-            return prior
+        total = sum(v for k, v in from_counts.items() if k != from_tactic)
         count = from_counts.get(to_tactic, 0)
-        smoothed = (count + self.SMOOTHING_ALPHA) / (total + self.SMOOTHING_ALPHA * len(MITRE_TRANSITIONS))
-        return smoothed
+        prior = MITRE_TRANSITIONS.get(from_tactic, {}).get(to_tactic, 0.01)
+        if total == 0:
+            return prior
+        empirical = count / total if total > 0 else 0.0
+        blended = 0.6 * prior + 0.4 * empirical
+        return blended
 
     def _predict_next_tactics(self, current_tactic: str, top_k: int = 3) -> List[Tuple[str, float]]:
         candidates = []
         for tactic in MITRE_TRANSITIONS.get(current_tactic, {}):
+            if tactic == current_tactic:
+                continue
             prob = self._get_transition_prob(current_tactic, tactic)
             candidates.append((tactic, prob))
         candidates.sort(key=lambda x: x[1], reverse=True)
@@ -339,36 +342,34 @@ class AttackChainPredictor:
                 score = base_weight + graph_boost
                 technique_scores.append((tid, tinfo, score))
 
-            total_score = sum(s for _, _, s in technique_scores)
             technique_scores.sort(key=lambda x: x[2], reverse=True)
-            top_techniques = technique_scores[:3]
+            top_technique = technique_scores[0]
 
-            for tid, tinfo, score in top_techniques:
-                technique_prob = score / total_score if total_score > 0 else 1.0 / len(top_techniques)
-                combined_prob = tactic_prob * technique_prob
-                combined_prob = min(combined_prob, 1.0)
+            tid, tinfo, score = top_technique
+            combined_prob = tactic_prob
 
-                for pattern in patterns:
-                    if len(pattern) >= 2 and pattern[0] == entity_id:
-                        for nid in pattern[1:]:
-                            n_entity = await self.knowledge_graph.get_entity(nid)
-                            if n_entity:
-                                n_tactic = ENTITY_TYPE_TO_TACTIC.get(n_entity.type.value if hasattr(n_entity.type, 'value') else str(n_entity.type), "")
-                                if n_tactic == tactic:
-                                    combined_prob = min(combined_prob * 1.3, 1.0)
+            for pattern in patterns:
+                if len(pattern) >= 2 and pattern[0] == entity_id:
+                    for nid in pattern[1:]:
+                        n_entity = await self.knowledge_graph.get_entity(nid)
+                        if n_entity:
+                            n_tactic = ENTITY_TYPE_TO_TACTIC.get(n_entity.type.value if hasattr(n_entity.type, 'value') else str(n_entity.type), "")
+                            if n_tactic == tactic:
+                                combined_prob = min(combined_prob * 1.3, 1.0)
 
-                risk = tinfo.get("risk", "medium")
-                predictions.append(PredictedStep(
-                    step=len(predictions) + 1,
-                    action=f"可能执行{tinfo['name']}({tid})",
-                    technique_id=tid,
-                    technique_name=tinfo["name"],
-                    probability=round(combined_prob, 3),
-                    reasoning=f"基于MITRE ATT&CK马尔可夫链: {current_tactic}→{tactic}(P={tactic_prob:.3f}), 技术{tid}属于{tactic}阶段",
-                    related_entities=[entity_id],
-                    time_window=self._estimate_time_window(tactic),
-                    risk_level=risk,
-                ))
+            risk = tinfo.get("risk", "medium")
+            other_techniques = [f"{t[0]}({t[1]['name']})" for t in technique_scores[1:4]]
+            predictions.append(PredictedStep(
+                step=len(predictions) + 1,
+                action=f"可能执行{tinfo['name']}({tid})",
+                technique_id=tid,
+                technique_name=tinfo["name"],
+                probability=round(combined_prob, 3),
+                reasoning=f"基于MITRE ATT&CK马尔可夫链: {current_tactic}→{tactic}(P={tactic_prob:.3f}), 最可能技术{tid}属于{tactic}阶段" + (f", 其他可能技术: {', '.join(other_techniques)}" if other_techniques else ""),
+                related_entities=[entity_id],
+                time_window=self._estimate_time_window(tactic),
+                risk_level=risk,
+            ))
 
         predictions.sort(key=lambda p: p.probability, reverse=True)
 
