@@ -527,6 +527,32 @@ export const api = {
       return data;
     },
   },
+  alerts: {
+    getActive: async (severity?: string) => {
+      const { data } = await apiClient.get('/alerts/active', { params: severity ? { severity } : {} });
+      return data;
+    },
+    getStats: async () => {
+      const { data } = await apiClient.get('/alerts/stats');
+      return data;
+    },
+    acknowledge: async (alertId: string) => {
+      const { data } = await apiClient.post(`/alerts/${alertId}/acknowledge`);
+      return data;
+    },
+    getRules: async () => {
+      const { data } = await apiClient.get('/alerts/rules');
+      return data;
+    },
+    toggleRule: async (ruleId: string, enabled: boolean) => {
+      const { data } = await apiClient.put(`/alerts/rules/${ruleId}/toggle`, null, { params: { enabled } });
+      return data;
+    },
+    testTrigger: async () => {
+      const { data } = await apiClient.post('/alerts/test-trigger');
+      return data;
+    },
+  },
   organism: {
     spawn: async (intelligenceId: string, species: string, initialData: Record<string, unknown> = {}) => {
       const { data } = await apiClient.post('/organism/spawn', {

@@ -115,6 +115,13 @@ async def get_dashboard_stats(
 
     total_intelligence = db_raw_count + db_cleaned_count + db_analyzed_count
 
+    try:
+        vs_intel_count = await vector_store.count("intelligence")
+        if vs_intel_count > total_intelligence:
+            total_intelligence = vs_intel_count
+    except Exception as exc:
+        logger.warning(f"Failed to get VectorStore intelligence count: {exc}")
+
     threat_level_distribution: Dict[str, int] = {
         "critical": 0,
         "high": 0,

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
@@ -476,3 +476,35 @@ async def get_analyzed_intelligence(
     if result is None:
         raise HTTPException(status_code=404, detail="Analyzed intelligence not found")
     return result
+
+
+@router.post("/{intelligence_id}/export/stix")
+async def export_intelligence_stix(
+    intelligence_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    from app.core.stix_exporter import STIXExporter
+    exporter = STIXExporter()
+    vs = request.app.state.vector_store
+    results = vs.search(intelligence_id, n_results=1)
+    intel_data = results[0] if results else {"id": intelligence_id, "content": intelligence_id}
+    bundle = exporter.export_intelligence(intel_data)
+    return bundle
+
+
+@router.post("/export/stix-bundle")
+async def export_stix_bundle(
+    request: Request,
+    limit: int = Query(50, le=200),
+    threat_level: Optional[str] = None,
+    user: User = Depends(get_current_user),
+):
+    from app.core.stix_exporter import STIXExporter
+    exporter = STIXExporter()
+    vs = request.app.state.vector_store
+    results = vs.search("*", n_results=limit)
+    if threat_level:
+        results = [r for r in results if r.get("metadata", {}).get("threat_level") == threat_level]
+    bundle = exporter.export_bundle(results)
+    return bundle

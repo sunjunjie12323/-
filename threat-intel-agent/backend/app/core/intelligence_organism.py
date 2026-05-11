@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import os
+import random
 from collections import Counter, deque
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
@@ -46,6 +47,19 @@ EXPECTED_MENTIONS_PER_HOUR = {
 }
 
 SIGNIFICANT_CHANGE_THRESHOLD = 0.3
+
+SPECIES_INITIAL_VITALITY_RANGE = {
+    "ip": (0.6, 0.95),
+    "domain": (0.6, 0.95),
+    "phone": (0.5, 0.85),
+    "bankcard": (0.5, 0.85),
+    "organization": (0.3, 0.7),
+    "ttp": (0.3, 0.7),
+    "slang": (0.5, 0.85),
+    "campaign": (0.4, 0.75),
+}
+
+DEFAULT_INITIAL_VITALITY_RANGE = (0.4, 0.85)
 
 
 @dataclass
@@ -266,7 +280,7 @@ class IntelligenceOrganismEngine:
         next_check = (now + timedelta(hours=max(half_life * 0.1, 1))).isoformat()
 
         gene_matches = await self.find_gene_matches(initial_data)
-        inherited_vitality = 1.0
+        inherited_vitality = None
         inherited_generation = 1
         parent_ids: List[str] = []
         inherited_patterns: List[str] = []
@@ -275,11 +289,17 @@ class IntelligenceOrganismEngine:
         if gene_matches:
             best_gene = gene_matches[0]
             inherited_props = await self.inherit_genes(intelligence_id, [best_gene.gene_id])
-            inherited_vitality = inherited_props.get("initial_vitality", 1.0)
+            inherited_vitality = inherited_props.get("initial_vitality")
             inherited_generation = inherited_props.get("generation", 1)
             parent_ids = inherited_props.get("parent_ids", [])
             inherited_patterns = inherited_props.get("patterns", [])
             inherited_associations = inherited_props.get("associations", [])
+
+        if inherited_vitality is not None:
+            initial_vitality = inherited_vitality
+        else:
+            vitality_range = SPECIES_INITIAL_VITALITY_RANGE.get(species, DEFAULT_INITIAL_VITALITY_RANGE)
+            initial_vitality = random.uniform(vitality_range[0], vitality_range[1])
 
         organism = IntelligenceOrganism(
             intelligence_id=intelligence_id,
@@ -287,7 +307,7 @@ class IntelligenceOrganismEngine:
             born_at=born_at,
             current_age_hours=0.0,
             generation=inherited_generation,
-            vitality=inherited_vitality,
+            vitality=initial_vitality,
             evolution_log=[],
             mutations=[],
             offspring=[],
@@ -326,6 +346,32 @@ class IntelligenceOrganismEngine:
         if not skip_save:
             await self.save_to_disk()
         return organism
+
+    async def simulate_time_passage(self, hours: float):
+        now = datetime.now(timezone.utc)
+        for organism in self.organisms.values():
+            new_born_at = now - timedelta(hours=hours)
+            organism.born_at = new_born_at.isoformat()
+            organism.current_age_hours = hours
+
+            simulated_mentions = max(1, int(EXPECTED_MENTIONS_PER_HOUR.get(organism.species, 0.01) * hours * random.uniform(0.3, 1.5)))
+            organism.mention_count = simulated_mentions
+            organism.total_use_count = max(1, int(simulated_mentions * random.uniform(0.4, 0.9)))
+            organism.confirmed_use_count = max(0, int(organism.total_use_count * random.uniform(0.2, 0.8)))
+
+            freshness = 0.5 ** (hours / organism.half_life) if organism.half_life > 0 else 0.0
+            expected_mentions = EXPECTED_MENTIONS_PER_HOUR.get(organism.species, 0.01) * hours
+            activity = min(organism.mention_count / max(expected_mentions, 1), 1.0) if expected_mentions > 0 else 0.5
+            relevance = 0.5
+            if organism.total_use_count > 0:
+                relevance = min(organism.confirmed_use_count / organism.total_use_count, 1.0)
+            organism.vitality = freshness * activity * relevance
+            organism.is_alive = organism.vitality >= DEATH_THRESHOLD
+
+            next_check_delta = max(organism.half_life * 0.1, 1)
+            organism.next_check_at = (now + timedelta(hours=next_check_delta)).isoformat()
+
+        logger.info(f"Simulated {hours:.1f} hours of time passage for all organisms")
 
     async def evolve(
         self, organism_id: str, new_data: Dict, trigger: str = "auto_monitor", skip_save: bool = False

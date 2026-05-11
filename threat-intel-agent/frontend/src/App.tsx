@@ -13,6 +13,7 @@ import Reports from './pages/Reports';
 import Login from './pages/Login';
 import AgentPage from './pages/Agent';
 import Innovation from './pages/Innovation';
+import Alerts from './pages/Alerts';
 import { tokenStorage } from './utils/tokenStorage';
 
 const getToken = (): string | null => {
@@ -124,6 +125,14 @@ const App: React.FC = () => {
             element={
               <AuthGuard>
                 <Innovation />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/alerts"
+            element={
+              <AuthGuard>
+                <Alerts />
               </AuthGuard>
             }
           />

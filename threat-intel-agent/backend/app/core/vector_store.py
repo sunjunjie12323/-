@@ -47,15 +47,30 @@ class VectorStore:
     async def _embed_batch(self, texts: List[str]) -> List[List[float]]:
         return self._embedding.embed_batch(texts)
 
+    @staticmethod
+    def _sanitize_metadata(metadata: dict) -> dict:
+        sanitized = {}
+        for k, v in metadata.items():
+            if isinstance(v, (str, int, float, bool)):
+                sanitized[k] = v
+            elif isinstance(v, (list, tuple, set)):
+                sanitized[k] = ",".join(str(x) for x in v)
+            elif v is None:
+                sanitized[k] = ""
+            else:
+                sanitized[k] = str(v)
+        return sanitized
+
     async def add_intelligence(self, intel_id: str, content: str, metadata: dict):
         try:
             embedding = await self._embed(content)
+            sanitized = self._sanitize_metadata(metadata)
             async with self._lock:
                 self._collections["intelligence"].add(
                     ids=[intel_id],
                     embeddings=[embedding],
                     documents=[content],
-                    metadatas=[metadata],
+                    metadatas=[sanitized],
                 )
             logger.debug(f"Added intelligence vector: {intel_id}")
         except Exception as exc:
@@ -109,12 +124,13 @@ class VectorStore:
     async def add_entity(self, entity_id: str, content: str, metadata: dict):
         try:
             embedding = await self._embed(content)
+            sanitized = self._sanitize_metadata(metadata)
             async with self._lock:
                 self._collections["entities"].add(
                     ids=[entity_id],
                     embeddings=[embedding],
                     documents=[content],
-                    metadatas=[metadata],
+                    metadatas=[sanitized],
                 )
             logger.debug(f"Added entity vector: {entity_id}")
         except Exception as exc:
@@ -141,12 +157,13 @@ class VectorStore:
     async def add_blacktalk(self, term_id: str, content: str, metadata: dict):
         try:
             embedding = await self._embed(content)
+            sanitized = self._sanitize_metadata(metadata)
             async with self._lock:
                 self._collections["blacktalk"].add(
                     ids=[term_id],
                     embeddings=[embedding],
                     documents=[content],
-                    metadatas=[metadata],
+                    metadatas=[sanitized],
                 )
             logger.debug(f"Added blacktalk vector: {term_id}")
         except Exception as exc:

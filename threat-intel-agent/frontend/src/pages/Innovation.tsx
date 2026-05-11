@@ -29,6 +29,8 @@ import {
   HeartOutlined,
 } from '@ant-design/icons';
 import { api } from '../services/api';
+import AttackChainGraph from '../components/AttackChainGraph';
+import AttributionSankey from '../components/AttributionSankey';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -244,6 +246,21 @@ const AttackPredictionTab: React.FC = () => {
               ),
               status: 'wait' as const,
             }))}
+          />
+        </Card>
+      )}
+
+      {prediction && steps.length > 0 && (
+        <Card title="攻击链可视化">
+          <AttackChainGraph
+            predictions={steps.map((step: any, idx: number) => ({
+              step: idx + 1,
+              technique_name: step.action || step.name || step.description || step.technique_name || '',
+              probability: typeof step.probability === 'number' ? step.probability : 0.5,
+              risk_level: step.risk_level || step.risk || 'medium',
+              reasoning: step.reasoning || step.reason || '',
+            }))}
+            entityName={entityName}
           />
         </Card>
       )}
@@ -561,6 +578,20 @@ const AttributionTab: React.FC = () => {
       )}
 
       {matchesLoading && <Spin tip="查找同源实体中..." />}
+
+      {!matchesLoading && matches.length > 0 && (
+        <Card title="归因桑基图">
+          <AttributionSankey
+            matches={matches.map((match: any) => ({
+              source_platform: match.source_platform || match.sourcePlatform || 'unknown',
+              target_platform: match.target_platform || match.targetPlatform || 'unknown',
+              similarity: match.overall_similarity || match.similarity || 0,
+              evidence: match.evidence ? (Array.isArray(match.evidence) ? match.evidence : [match.evidence]) : undefined,
+            }))}
+            entityName={entityName}
+          />
+        </Card>
+      )}
 
       {!matchesLoading && matches.length > 0 && (
         <Row gutter={[16, 16]}>

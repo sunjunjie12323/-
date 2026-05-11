@@ -33,6 +33,7 @@ from app.core.provenance_chain import ProvenanceChain
 from app.core.entity_attribution import EntityAttribution
 from app.core.temporal_decay import TemporalDecay
 from app.core.intelligence_organism import IntelligenceOrganismEngine
+from app.core.alert_engine import AlertEngine
 from app.db.database import init_db
 
 
@@ -92,12 +93,12 @@ manager = ConnectionManager()
 async def _initialize_services(app: FastAPI):
     logger.info("Initializing core services...")
 
-    logger.info("[1/17] Creating LLMService...")
+    logger.info("[1/18] Creating LLMService...")
     llm = LLMService()
     app.state.llm = llm
     logger.info("LLMService created")
 
-    logger.info("[2/17] Creating VectorStore with local embedding engine...")
+    logger.info("[2/18] Creating VectorStore with local embedding engine...")
     from app.core.local_embedding import LocalEmbeddingEngine
     embedding_engine = LocalEmbeddingEngine(dim=256)
     vector_store = VectorStore(
@@ -108,17 +109,17 @@ async def _initialize_services(app: FastAPI):
     app.state.embedding_engine = embedding_engine
     logger.info(f"VectorStore created (local TF-IDF+SVD embedding, dim={embedding_engine.dim})")
 
-    logger.info("[3/17] Creating KnowledgeGraph...")
+    logger.info("[3/18] Creating KnowledgeGraph...")
     knowledge_graph = KnowledgeGraph(persist_dir="./graph_data")
     app.state.knowledge_graph = knowledge_graph
     logger.info("KnowledgeGraph created")
 
-    logger.info("[4/17] Creating BlackTalkEngine...")
+    logger.info("[4/18] Creating BlackTalkEngine...")
     blacktalk_engine = BlackTalkEngine(llm=llm, vector_store=vector_store)
     app.state.blacktalk_engine = blacktalk_engine
     logger.info(f"BlackTalkEngine created with {len(blacktalk_engine._dictionary)} seed terms")
 
-    logger.info("[5/17] Initializing BlackTalkEngine vectors...")
+    logger.info("[5/18] Initializing BlackTalkEngine vectors...")
     try:
         await asyncio.wait_for(blacktalk_engine.initialize_vectors(), timeout=30.0)
         logger.info("BlackTalkEngine vectors initialized")
@@ -127,17 +128,17 @@ async def _initialize_services(app: FastAPI):
     except Exception as exc:
         logger.warning(f"BlackTalkEngine vector initialization failed: {exc}. Vectors will be built on-demand.")
 
-    logger.info("[6/17] Creating EvidenceChain...")
+    logger.info("[6/18] Creating EvidenceChain...")
     evidence_chain = EvidenceChain(llm=llm, vector_store=vector_store)
     app.state.evidence_chain = evidence_chain
     logger.info("EvidenceChain created")
 
-    logger.info("[7/17] Creating PIREngine...")
+    logger.info("[7/18] Creating PIREngine...")
     pir_engine = PIREngine(llm=llm, vector_store=vector_store)
     app.state.pir_engine = pir_engine
     logger.info("PIREngine created")
 
-    logger.info("[8/17] Creating OrchestratorAgent with all sub-agents...")
+    logger.info("[8/18] Creating OrchestratorAgent with all sub-agents...")
     from app.agents.orchestrator import OrchestratorAgent
 
     orchestrator = OrchestratorAgent(
@@ -151,7 +152,7 @@ async def _initialize_services(app: FastAPI):
     app.state.orchestrator = orchestrator
     logger.info("OrchestratorAgent created with all sub-agents")
 
-    logger.info("[9/17] Creating collectors...")
+    logger.info("[9/18] Creating collectors...")
     from app.collectors.telegram_collector import TelegramCollector
     from app.collectors.forum_collector import ForumCollector
     from app.collectors.wechat_collector import WeChatCollector
@@ -174,7 +175,7 @@ async def _initialize_services(app: FastAPI):
     app.state.commercial_collector = commercial_collector
     logger.info("All collectors created (including commercial sources)")
 
-    logger.info("[10/17] Registering collectors with CollectorAgent...")
+    logger.info("[10/18] Registering collectors with CollectorAgent...")
     orchestrator.collector.register_collector("telegram", telegram_collector.collect)
     orchestrator.collector.register_collector("forum", forum_collector.collect)
     orchestrator.collector.register_collector("wechat", wechat_collector.collect)
@@ -183,13 +184,13 @@ async def _initialize_services(app: FastAPI):
     orchestrator.collector.register_collector("commercial", commercial_collector.collect)
     logger.info("All collectors registered")
 
-    logger.info("[11/17] Registering task queue handlers and starting workers...")
+    logger.info("[11/18] Registering task queue handlers and starting workers...")
     from app.api.agent import register_agent_handlers
     register_agent_handlers()
     await task_queue.start()
     logger.info(f"Task queue started with {settings.MAX_CONCURRENT_TASKS} workers")
 
-    logger.info("[12/17] Creating innovation engines (real ML algorithms, no LLM)...")
+    logger.info("[12/18] Creating innovation engines (real ML algorithms, no LLM)...")
 
     zero_day_detector = ZeroDayDetector(vector_store=vector_store, blacktalk_engine=blacktalk_engine)
     app.state.zero_day_detector = zero_day_detector
@@ -250,7 +251,12 @@ async def _initialize_services(app: FastAPI):
     app.state.intelligence_organism = intelligence_organism
     logger.info("IntelligenceOrganismEngine created (TF-IDF cosine similarity validation)")
 
-    logger.info("[13/17] Creating default admin user...")
+    logger.info("[13/18] Creating AlertEngine...")
+    alert_engine = AlertEngine()
+    app.state.alert_engine = alert_engine
+    logger.info(f"AlertEngine created with {len(alert_engine.rules)} default rules")
+
+    logger.info("[14/18] Creating default admin user...")
     create_default_admin()
     app.state.connection_manager = manager
     logger.info("All services initialized and stored in app.state")
@@ -538,7 +544,8 @@ async def health_check(request: Request):
     for attr in ("llm", "vector_store", "knowledge_graph", "blacktalk_engine",
                  "evidence_chain", "pir_engine", "orchestrator",
                  "zero_day_detector", "attack_chain_predictor", "provenance_chain",
-                 "entity_attribution", "temporal_decay", "intelligence_organism"):
+                 "entity_attribution", "temporal_decay", "intelligence_organism",
+                 "alert_engine"):
         services_status[attr] = hasattr(request.app.state, attr)
 
     task_queue_stats = {

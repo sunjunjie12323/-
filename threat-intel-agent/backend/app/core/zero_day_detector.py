@@ -93,18 +93,18 @@ class ZeroDayDetector:
         "does", "am", "being", "very", "much", "more", "such", "each",
         "own", "should", "may", "must", "might", "still", "through",
         "where", "while", "here", "between", "both", "under", "never",
-        "same", "another", "much", "before", "off", "too", "down",
+        "same", "another", "before", "off", "too", "down",
         "really", "need", "right", "long", "big", "high", "old", "small",
         "large", "next", "early", "young", "important", "few", "public",
-        "bad", "same", "able", "free", "full", "sure", "real", "top",
-        "best", "last", "left", "end", "run", "hand", "high", "place",
-        "case", "week", "system", "plan", "point", "home", "water", "room",
-        "area", "money", "story", "fact", "month", "lot", "right", "study",
+        "bad", "able", "free", "full", "sure", "real", "top",
+        "best", "last", "left", "end", "run", "hand", "place",
+        "case", "week", "plan", "point", "home", "room",
+        "area", "money", "story", "fact", "month", "lot", "study",
         "book", "eye", "job", "word", "business", "issue", "side", "kind",
         "head", "house", "service", "friend", "father", "power", "hour",
-        "game", "line", "end", "member", "law", "car", "city", "community",
+        "game", "line", "member", "law", "car", "city", "community",
         "name", "president", "team", "minute", "idea", "body", "info",
-        "back", "parent", "face", "level", "office", "door", "health",
+        "parent", "face", "level", "office", "door", "health",
         "person", "art", "war", "history", "party", "result", "change",
         "morning", "reason", "research", "girl", "guy", "moment", "air",
         "teacher", "force", "education", "foot", "boy", "age", "policy",
@@ -113,16 +113,270 @@ class ZeroDayDetector:
         "security", "attack", "threat", "vulnerability", "exploit", "malware",
         "crypto", "novel", "zero", "day", "remote", "access", "tool",
         "server", "client", "web", "application", "software", "hardware",
-        "system", "user", "admin", "root", "shell", "script", "file",
+        "user", "admin", "root", "shell", "script", "file",
         "password", "token", "key", "cert", "sign", "log", "event",
         "alert", "report", "scan", "probe", "check", "test", "debug",
         "proxy", "tunnel", "port", "host", "domain", "email", "phone",
         "bank", "card", "account", "payment", "transfer", "wallet",
         "bitcoin", "ethereum", "block", "chain", "miner", "exchange",
-        "dark", "web", "market", "forum", "chat", "channel", "group",
+        "dark", "forum", "chat", "channel", "group",
         "post", "thread", "message", "link", "site", "page", "search",
         "download", "upload", "share", "sell", "buy", "price", "cost",
-        "sale", "offer", "deal", "trade", "service", "support", "help",
+        "sale", "offer", "deal", "trade", "support", "help",
+        "about", "above", "across", "again", "against", "along", "already",
+        "always", "among", "around", "away", "became", "become", "becomes",
+        "behind", "below", "beside", "besides", "beyond", "brought",
+        "called", "certain", "clear", "close", "common", "company",
+        "country", "course", "different", "done", "during", "enough",
+        "every", "found", "general", "great", "group", "having",
+        "however", "itself", "known", "later", "least", "less",
+        "let", "likely", "little", "looked", "made", "many",
+        "may", "means", "might", "million", "must", "nothing", "often",
+        "order", "others", "part", "per", "perhaps", "possible",
+        "probably", "quite", "rather", "said", "set", "since",
+        "something", "sometimes", "state", "still", "taken", "tell",
+        "though", "today", "together", "toward", "turned", "upon",
+        "using", "usually", "without", "within", "yet",
+        "variant", "version", "type", "form", "method", "based",
+        "via", "using", "against", "through", "across", "within",
+        "associated", "related", "involved", "targeted", "affected",
+        "detected", "discovered", "reported", "observed", "identified",
+        "analyzed", "described", "considered", "believed", "suspected",
+        "appears", "contains", "includes", "requires", "provides",
+        "allows", "enables", "supports", "creates", "generates",
+        "performs", "operates", "functions", "works", "runs",
+        "unknown", "ransomware", "double", "extortion", "backdoor",
+        "botnet", "phishing", "trojan", "worm", "virus", "ransom",
+        "stealer", "drainer", "loader", "dropper", "implant", "beacon",
+        "exfiltration", "lateral", "persistence", "privilege",
+        "escalation", "evasion", "obfuscation", "detection", "bypass",
+        "infection", "propagation", "spreading", "campaign",
+        "operation", "actor", "group", "apt", "advanced", "persistent",
+        "command", "control", "infection", "payload", "inject",
+        "encrypt", "decrypt", "encode", "decode", "obfuscate",
+        "exfiltrate", "penetrate", "compromise", "breach", "intrude",
+        "weaponize", "deliver", "execute", "install", "persist",
+        "communicate", "exfill", "spread", "propagate", "scan",
+        "recon", "reconnaissance", "enumerate", "fingerprint",
+        "initial", "access", "execution", "collection", "exfiltration",
+        "impact", "disruption", "destroy", "deface", "deface",
+        "fraud", "scam", "scheme", "plot", "conspiracy",
+        "indicators", "compromise", "artifact", "observable",
+        "infrastructure", "capability", "toolset", "toolkit",
+        "framework", "platform", "ecosystem", "marketplace",
+        "underground", "illicit", "clandestine", "covert",
+        "sophisticated", "complex", "elaborate", "intricate",
+        "emerging", "evolving", "shifting", "adapting",
+        "targeting", "victim", "organization", "enterprise",
+        "sector", "industry", "vertical", "region", "country",
+        "government", "financial", "healthcare", "energy",
+        "supply", "chain", "third", "party", "vendor",
+        "update", "patch", "mitigation", "remediation",
+        "defense", "defender", "protection", "prevention",
+        "response", "incident", "forensic", "investigation",
+    })
+
+    _CHINESE_COMMON_WORDS = frozenset({
+        "出现", "新的", "可以", "通过", "利用", "进行", "发现", "攻击",
+        "漏洞", "系统", "网络", "数据", "安全", "软件", "服务器", "网站",
+        "用户", "信息", "技术", "问题", "方法", "功能", "服务", "平台",
+        "管理", "研究", "分析", "报告", "发展", "情况", "状态", "结果",
+        "影响", "原因", "条件", "环境", "资源", "目标", "过程", "关系",
+        "方面", "部分", "领域", "结构", "模式", "机制", "措施", "方案",
+        "政策", "制度", "标准", "规范", "要求", "原则", "理论", "概念",
+        "观点", "态度", "立场", "意见", "建议", "决定", "选择", "判断",
+        "评价", "认识", "理解", "思考", "讨论", "交流", "合作", "竞争",
+        "冲突", "矛盾", "变化", "进步", "提高", "增加", "扩大", "加强",
+        "改善", "优化", "调整", "改革", "创新", "突破", "超越", "领先",
+        "优势", "特色", "差异", "相同", "类似", "相关", "重要", "关键",
+        "主要", "基本", "核心", "重点", "难点", "热点", "焦点", "亮点",
+        "特点", "缺点", "优点", "弱点", "起点", "终点", "角度", "层面",
+        "维度", "深度", "广度", "高度", "速度", "力度", "程度", "范围",
+        "规模", "水平", "质量", "效率", "效果", "成果", "成本", "风险",
+        "机遇", "挑战", "困难", "障碍", "威胁", "危害", "损失", "伤害",
+        "破坏", "后果", "责任", "义务", "权利", "利益", "价值", "意义",
+        "作用", "目的", "动机", "背景", "基础", "前提", "因素", "现象",
+        "本质", "规律", "趋势", "方向", "前景", "未来", "历史", "现状",
+        "状况", "形势", "局面", "格局", "态势", "动态", "演变", "转变",
+        "转化", "更新", "升级", "迭代", "替代", "取代", "淘汰", "兴起",
+        "崛起", "繁荣", "衰落", "复苏", "恢复", "重建", "整合", "融合",
+        "协同", "联动", "互动", "互通", "互联", "共享", "共建", "共赢",
+        "互利", "互补", "协作", "配合", "支持", "帮助", "保护", "维护",
+        "保障", "保证", "确保", "防范", "预防", "预警", "监控", "监测",
+        "检测", "识别", "确认", "验证", "认证", "授权", "许可", "批准",
+        "同意", "允许", "接受", "认可", "承认", "肯定", "否定", "拒绝",
+        "反对", "抵抗", "应对", "处理", "解决", "面对", "重视", "关注",
+        "关心", "担忧", "担心", "害怕", "恐惧", "紧张", "紧急", "危险",
+        "严重", "恶劣", "失败", "挫折", "打击", "冲击", "震惊", "惊讶",
+        "意外", "突然", "瞬间", "短暂", "暂时", "临时", "时候", "时刻",
+        "时间", "日期", "年份", "月份", "周期", "阶段", "时期", "时代",
+        "今天", "明天", "昨天", "早上", "中午", "下午", "晚上", "白天",
+        "天气", "气候", "温度", "空气", "污染", "治理", "增强", "巩固",
+        "稳定", "平稳", "安定", "和平", "和谐", "恰当", "适当", "合适",
+        "正确", "准确", "精确", "真实", "客观", "公正", "公平", "公开",
+        "透明", "清晰", "明确", "具体", "详细", "完整", "全面", "彻底",
+        "深入", "细致", "仔细", "认真", "严谨", "严格", "严厉", "严肃",
+        "慎重", "谨慎", "小心", "耐心", "决心", "信心", "信念", "理想",
+        "追求", "梦想", "道路", "途径", "方式", "手段", "步骤", "程序",
+        "流程", "环节", "操作", "执行", "实施", "落实", "推进", "推动",
+        "促进", "带动", "引领", "引导", "指导", "培训", "教育", "学习",
+        "探索", "探讨", "沟通", "对话", "协商", "谈判", "商量", "争论",
+        "辩论", "争议", "分歧", "区别", "差距", "距离", "空间", "地方",
+        "地区", "区域", "地带", "界限", "边界", "边缘", "中心", "要点",
+        "要素", "源头", "起源", "来源", "出处", "渠道", "路径", "通道",
+        "入口", "出口", "门户", "窗口", "载体", "媒体", "工具", "设备",
+        "形式", "形态", "走向", "动向", "展望", "预期", "预测", "估计",
+        "推测", "猜测", "评估", "鉴定", "鉴别", "辨别", "区分", "分类",
+        "归类", "整理", "归纳", "总结", "概括", "提炼", "提取", "获取",
+        "收集", "采集", "编辑", "编写", "编制", "撰写", "起草", "拟定",
+        "制定", "出台", "发布", "公布", "宣布", "通告", "通知", "通报",
+        "公告", "声明", "决策", "裁决", "判决", "裁定", "认定", "核实",
+        "查证", "调查", "调研", "考察", "视察", "检查", "检验", "测试",
+        "试验", "实验", "实践", "实行", "贯彻", "加快", "加速", "深化",
+        "拓展", "延伸", "拓宽", "开拓", "开发", "开放", "解放", "释放",
+        "激发", "激活", "启动", "开始", "开启", "发起", "发动", "组织",
+        "安排", "部署", "布置", "分配", "调配", "调度", "协调", "统筹",
+        "规划", "计划", "设计", "策划", "谋划", "筹备", "准备", "防备",
+        "防护", "保卫", "守护", "监督", "监管", "整治", "整顿", "改造",
+        "改良", "改进", "完善", "提升", "强化", "细化", "量化",
+        "不同", "普遍", "特殊", "一般", "抽象", "主观", "积极", "消极",
+        "主动", "被动", "直接", "间接", "内部", "外部", "正式", "公开",
+        "合法", "非法", "正常", "异常", "有效", "无效", "成功",
+        "错误", "虚假", "局部", "动态", "静态", "固定", "灵活",
+        "传统", "现代", "新型", "高级", "低级", "中等", "优先",
+        "常规", "长期", "短期", "持续", "频繁", "偶尔", "大量",
+        "少量", "单一", "多样", "综合", "专业", "通用", "特定",
+        "广泛", "开放", "封闭", "隐蔽", "可见", "隐藏",
+        "因为", "所以", "但是", "然而", "虽然", "尽管", "如果",
+        "假如", "只要", "只有", "无论", "不管", "除了", "除非",
+        "而且", "并且", "或者", "还是", "由于", "基于", "根据",
+        "按照", "随着", "关于", "对于", "至于", "相比", "相对",
+        "针对", "面向", "为了", "以便", "以免", "导致", "引起",
+        "造成", "使得", "已经", "曾经", "正在", "将要", "即将",
+        "一直", "始终", "从来", "往往", "经常", "常常", "时常",
+        "有时", "很少", "并不", "并非", "不再", "还没", "尚未",
+        "未必", "非常", "十分", "特别", "尤其", "极其", "相当",
+        "比较", "稍微", "更加", "越来越", "逐渐", "逐步", "迅速",
+        "快速", "立即", "马上", "终于", "刚刚", "快要",
+        "这个", "那个", "什么", "怎么", "为什么", "哪里", "谁",
+        "多少", "怎样", "如何", "自己", "他们", "我们", "你们",
+        "它们", "大家", "彼此", "相互", "所有", "每个", "一些",
+        "任何", "其他", "另外", "分别", "各自",
+        "变种", "传播", "供应链", "感染", "防御", "防护",
+        "渗透", "响应", "处置", "溯源", "取证", "应急",
+        "木马", "勒索", "后门", "僵尸", "钓鱼", "间谍",
+        "蠕虫", "病毒", "恶意", "劫持", "篡改", "窃取",
+        "盗取", "拦截", "伪造", "冒充", "欺骗", "诱骗",
+        "操控", "控制", "远程", "指令", "通信", "回连",
+        "注入", "执行", "提权", "横向", "持久", "驻留",
+        "免杀", "混淆", "加密", "解密", "编码", "解码",
+        "代理", "转发", "隧道", "反弹", "映射", "探测",
+        "扫描", "爆破", "绕过", "突破", "规避", "逃逸",
+        "释放", "加载", "注入", "挂钩", "回调", "劫持",
+        "挖矿", "劫持", "DDoS", "CC攻击",
+        "暗网", "黑产", "灰产", "诈骗", "出售", "贩卖",
+        "交易", "黑市", "地下", "招募", "求购", "佣金",
+        "价格", "套现", "走账", "洗白", "过桥",
+        "供应链攻击", "暴力破解",
+        "手法", "不少", "骗了", "很好", "很多", "很大", "很小",
+        "很远", "很近", "很难", "很黑", "很白", "很红", "很快",
+        "骗人", "骗取", "忽悠", "欺负", "压迫", "剥削", "敲诈",
+        "恐吓", "胁迫", "强迫", "逼迫", "强制", "盗窃", "偷盗",
+        "抢劫", "掠夺", "侵犯", "侵害", "损害", "损伤",
+        "危险", "风险", "威胁", "恐吓", "勒索软件",
+        "通过", "进行", "发现", "利用", "可以",
+        "时候", "地方", "东西", "办法", "样子", "道理",
+        "关系", "问题", "意思", "感觉", "需要", "知道",
+        "认为", "觉得", "希望", "准备", "开始", "继续",
+        "完成", "实现", "达到", "获得", "得到", "保持",
+        "支持", "帮助", "解决", "处理", "管理", "控制",
+        "掌握", "了解", "认识", "理解", "思考", "讨论",
+        "交流", "合作", "竞争", "变化", "发展", "进步",
+        "提高", "增加", "扩大", "加强", "改善", "优化",
+        "调整", "改革", "创新", "突破", "超越", "领先",
+        "优势", "特色", "差异", "相同", "类似", "相关",
+        "重要", "关键", "主要", "基本", "核心", "重点",
+        "特点", "缺点", "优点", "弱点", "角度", "层面",
+        "深度", "广度", "高度", "速度", "力度", "程度",
+        "范围", "规模", "水平", "质量", "效率", "效果",
+        "成果", "成本", "机遇", "挑战", "困难", "障碍",
+        "危害", "损失", "伤害", "破坏", "影响", "后果",
+        "责任", "利益", "价值", "意义", "作用", "目的",
+        "动机", "背景", "基础", "前提", "因素", "现象",
+        "本质", "规律", "趋势", "方向", "前景", "未来",
+        "历史", "现状", "状况", "形势", "局面", "格局",
+        "态势", "动态", "演变", "转变", "转化", "更新",
+        "升级", "迭代", "替代", "取代", "淘汰", "兴起",
+        "崛起", "繁荣", "衰落", "复苏", "恢复", "重建",
+        "整合", "融合", "协同", "联动", "互动", "互通",
+        "互联", "共享", "共建", "共赢", "互利", "互补",
+        "协作", "配合", "保护", "维护", "保障", "保证",
+        "确保", "防范", "预防", "预警", "监控", "监测",
+        "检测", "识别", "确认", "验证", "认证", "授权",
+        "许可", "批准", "同意", "允许", "接受", "认可",
+        "承认", "肯定", "否定", "拒绝", "反对", "抵抗",
+        "应对", "解决", "面对", "重视", "关注", "关心",
+        "担忧", "担心", "害怕", "恐惧", "紧张", "紧急",
+        "严重", "恶劣", "失败", "挫折", "打击", "冲击",
+        "震惊", "惊讶", "意外", "突然", "瞬间", "短暂",
+        "暂时", "临时", "时间", "日期", "年份", "月份",
+        "周期", "阶段", "时期", "时代", "今天", "明天",
+        "昨天", "天气", "气候", "温度", "空气", "污染",
+        "治理", "增强", "巩固", "稳定", "平稳", "安定",
+        "和平", "和谐", "恰当", "适当", "合适", "正确",
+        "准确", "精确", "真实", "客观", "公正", "公平",
+        "公开", "透明", "清晰", "明确", "具体", "详细",
+        "完整", "全面", "彻底", "深入", "细致", "仔细",
+        "认真", "严谨", "严格", "严厉", "严肃", "慎重",
+        "谨慎", "小心", "耐心", "决心", "信心", "信念",
+        "理想", "追求", "梦想", "道路", "途径", "方式",
+        "手段", "步骤", "程序", "流程", "环节", "操作",
+        "执行", "实施", "落实", "推进", "推动", "促进",
+        "带动", "引领", "引导", "指导", "培训", "教育",
+        "学习", "探索", "探讨", "沟通", "对话", "协商",
+        "谈判", "商量", "争论", "辩论", "争议", "分歧",
+        "区别", "差距", "距离", "空间", "地区", "区域",
+        "地带", "界限", "边界", "边缘", "中心", "要点",
+        "要素", "源头", "起源", "来源", "出处", "渠道",
+        "路径", "入口", "出口", "门户", "窗口", "载体",
+        "媒体", "工具", "设备", "形式", "形态", "走向",
+        "动向", "展望", "预期", "预测", "估计", "推测",
+        "猜测", "评估", "鉴定", "鉴别", "辨别", "区分",
+        "分类", "归类", "整理", "归纳", "总结", "概括",
+        "提炼", "提取", "获取", "收集", "采集", "编辑",
+        "编写", "编制", "撰写", "起草", "拟定", "制定",
+        "出台", "发布", "公布", "宣布", "通告", "通知",
+        "通报", "公告", "声明", "决策", "裁决", "判决",
+        "裁定", "认定", "核实", "查证", "调查", "调研",
+        "考察", "视察", "检查", "检验", "测试", "试验",
+        "实验", "实践", "实行", "贯彻", "加快", "加速",
+        "深化", "拓展", "延伸", "拓宽", "开拓", "开发",
+        "开放", "解放", "释放", "激发", "激活", "启动",
+        "开始", "开启", "发起", "发动", "组织", "安排",
+        "部署", "布置", "分配", "调配", "调度", "协调",
+        "统筹", "规划", "计划", "设计", "策划", "谋划",
+        "筹备", "准备", "防备", "防护", "保卫", "守护",
+        "监督", "监管", "整治", "整顿", "改造", "改良",
+        "改进", "完善", "提升", "强化", "细化", "量化",
+        "散步", "出去", "适合",
+    })
+
+    _CHINESE_CRIMINAL_CONTEXT_KEYWORDS = frozenset({
+        "暗网", "黑产", "灰产", "诈骗", "恶意", "木马", "勒索", "后门",
+        "漏洞利用", "0day", "零日", "黑客", "攻击", "变种", "传播",
+        "出售", "贩卖", "交易", "黑市", "地下", "非法", "违规",
+        "盗取", "窃取", "入侵", "植入", "感染", "僵尸", "远控",
+        "提权", "绕过", "突破", "免杀", "混淆", "挖矿", "劫持",
+        "钓鱼", "间谍", "蠕虫", "病毒", "篡改", "伪造", "冒充",
+        "欺骗", "诱骗", "操控", "拦截", "爆破", "暴力破解",
+        "供应链攻击", "勒索软件", "双重勒索", "数据泄露",
+        "跑分", "洗钱", "套现", "杀猪盘", "套路贷", "四件套",
+        "水房", "车手", "接码", "养号", "薅羊毛", "色流",
+        "撞库", "脱库", "社工", "肉鸡", "抓鸡", "挂马",
+        "DDoS", "CC攻击", "黑SEO", "菠菜", "盘口",
+        "招募", "求购", "佣金", "价格", "通道", "码商",
+        "电诈", "引流", "话术", "操盘手", "资金盘",
+        "出货", "收网", "分赃", "上线", "下线",
     })
 
     def __init__(self, vector_store: VectorStore, blacktalk_engine: BlackTalkEngine):
@@ -371,17 +625,33 @@ class ZeroDayDetector:
         known_terms = set(self.blacktalk_engine._term_index.keys())
         candidates = []
 
-        for i in range(len(tokens)):
-            for length in range(2, min(5, len(tokens) - i + 1)):
-                ngram = "".join(tokens[i:i + length])
-                if ngram in known_terms:
-                    continue
-                if len(ngram) < 2:
-                    continue
-                if ngram.isascii() and len(ngram) < 3:
-                    continue
-                if self._is_common_word_combination(tokens[i:i + length]):
-                    continue
+        english_tokens = []
+        for t in tokens:
+            if not any('\u4e00' <= ch <= '\u9fff' for ch in t):
+                english_tokens.append(t)
+
+        seen_ngrams = set()
+        for i in range(len(english_tokens)):
+            for length in range(1, min(4, len(english_tokens) - i + 1)):
+                token_slice = english_tokens[i:i + length]
+                if length == 1:
+                    ngram = token_slice[0]
+                    if ngram in self._COMMON_ENGLISH_WORDS:
+                        continue
+                    if ngram in known_terms:
+                        continue
+                    if len(ngram) < 3:
+                        continue
+                else:
+                    ngram = " ".join(token_slice)
+                    if ngram in known_terms:
+                        continue
+                    if all(t in self._COMMON_ENGLISH_WORDS for t in token_slice):
+                        continue
+                    if ngram in seen_ngrams:
+                        continue
+
+                seen_ngrams.add(ngram)
 
                 context_anomaly = self._compute_context_anomaly(ngram, text)
                 kl_drift = self._compute_kl_drift(text)
@@ -391,7 +661,7 @@ class ZeroDayDetector:
                     confidence += 0.3
                 if kl_drift > self.DRIFT_THRESHOLD:
                     confidence += 0.3
-                if any(kw in text for kw in ["出售", "价格", "佣金", "套现", "跑分", "通道", "接码", "养号", "出", "求购", "招募"]):
+                if any(kw in text for kw in ["出售", "价格", "佣金", "套现", "跑分", "通道", "接码", "养号", "求购", "招募", "暗网", "黑产", "诈骗", "恶意", "木马", "勒索", "后门", "攻击", "变种", "传播"]):
                     confidence += 0.2
                 if context_anomaly > 0.6:
                     confidence += 0.2
@@ -428,62 +698,116 @@ class ZeroDayDetector:
                 return True
         return False
 
-    def _detect_chinese_unknown_terms(self, text: str) -> List[Dict]:
+    _CHINESE_FUNCTION_CHARS = frozenset("的了在是我有和就不人都一个上也很好说到要去你会着看他这那他她它们把被让给对向从到为与以至于而且或但如若则虽因故什怎多么")
+
+    def _detect_chinese_zero_day_terms(self, text: str) -> List[Dict]:
         chinese_segments = re.findall(r'[\u4e00-\u9fff]+', text)
         if not chinese_segments:
             return []
 
-        bigrams = []
-        for segment in chinese_segments:
-            for j in range(len(segment) - 1):
-                bigrams.append(segment[j] + segment[j + 1])
-
         known_terms = set(self.blacktalk_engine._term_index.keys())
-        vocab = set(self._word2idx.keys())
+        all_known = self._CHINESE_COMMON_WORDS | self._CHINESE_CRIMINAL_CONTEXT_KEYWORDS | known_terms
+
+        has_criminal_context = any(kw in text for kw in self._CHINESE_CRIMINAL_CONTEXT_KEYWORDS)
+        if not has_criminal_context:
+            return []
+
         candidates = []
+        for segment in chinese_segments:
+            covered = [False] * len(segment)
+            for word in all_known:
+                if len(word) < 2:
+                    continue
+                start = 0
+                while True:
+                    idx = segment.find(word, start)
+                    if idx == -1:
+                        break
+                    for j in range(idx, min(idx + len(word), len(covered))):
+                        covered[j] = True
+                    start = idx + 1
 
-        for bigram in bigrams:
-            if bigram in known_terms:
-                continue
-            if bigram in vocab:
-                continue
+            i = 0
+            while i < len(segment):
+                if covered[i]:
+                    i += 1
+                    continue
+                j = i
+                while j < len(segment) and not covered[j]:
+                    j += 1
+                gap = segment[i:j]
+                if len(gap) >= 2:
+                    for glen in range(min(4, len(gap)), 1, -1):
+                        for k in range(len(gap) - glen + 1):
+                            chunk = gap[k:k + glen]
+                            if chunk in all_known:
+                                continue
+                            if chunk[0] in self._CHINESE_FUNCTION_CHARS or chunk[-1] in self._CHINESE_FUNCTION_CHARS:
+                                continue
+                            if self._can_decompose_into_known(chunk, all_known):
+                                continue
 
-            context_anomaly = self._compute_context_anomaly(bigram, text) if self._trained else 0.5
-            kl_drift = self._compute_kl_drift(text) if self._trained else 0.0
+                            confidence = 0.3
+                            if has_criminal_context:
+                                confidence += 0.3
+                            if len(chunk) >= 2:
+                                confidence += 0.2
+                            kl_drift = self._compute_kl_drift(text) if self._trained else 0.0
+                            if kl_drift > self.DRIFT_THRESHOLD:
+                                confidence += 0.2
 
-            confidence = 0.0
-            if bigram not in vocab:
-                confidence += 0.3
-            if context_anomaly > 0.4:
-                confidence += 0.2
-            if kl_drift > self.DRIFT_THRESHOLD:
-                confidence += 0.2
-            if any(kw in text for kw in ["出售", "价格", "佣金", "套现", "跑分", "通道", "接码", "养号", "出", "求购", "招募", "暗网", "变种", "木马", "攻击", "传播"]):
-                confidence += 0.2
-            if context_anomaly > 0.6:
-                confidence += 0.1
+                            confidence = min(confidence, 1.0)
 
-            confidence = min(confidence, 1.0)
+                            if confidence >= self.CONFIDENCE_THRESHOLD:
+                                idx = text.find(chunk)
+                                ctx = text[max(0, idx - 20):idx + len(chunk) + 20]
+                                candidates.append({
+                                    "term": chunk,
+                                    "confidence": confidence,
+                                    "context_anomaly": 0.0,
+                                    "kl_drift": kl_drift,
+                                    "context": ctx,
+                                    "_start": idx,
+                                    "_length": len(chunk),
+                                })
+                i = j
 
-            if confidence >= self.CONFIDENCE_THRESHOLD:
-                idx = text.find(bigram)
-                ctx = text[max(0, idx - 20):idx + len(bigram) + 20]
-                candidates.append({
-                    "term": bigram,
-                    "confidence": confidence,
-                    "context_anomaly": context_anomaly,
-                    "kl_drift": kl_drift,
-                    "context": ctx,
-                })
+        accepted = []
+        accepted_spans = []
+        for c in sorted(candidates, key=lambda x: (-x["_length"], -x["confidence"])):
+            subsumed = False
+            for span_start, span_end in accepted_spans:
+                if c["_start"] >= span_start and c["_start"] + c["_length"] <= span_end:
+                    subsumed = True
+                    break
+            if not subsumed and c["term"] not in [a["term"] for a in accepted]:
+                accepted_spans.append((c["_start"], c["_start"] + c["_length"]))
+                accepted.append(c)
 
-        seen = set()
-        unique = []
-        for c in sorted(candidates, key=lambda x: x["confidence"], reverse=True):
-            if c["term"] not in seen:
-                seen.add(c["term"])
-                unique.append(c)
+        results = []
+        for c in accepted:
+            results.append({
+                "term": c["term"],
+                "confidence": c["confidence"],
+                "context_anomaly": c["context_anomaly"],
+                "kl_drift": c["kl_drift"],
+                "context": c["context"],
+            })
 
-        return unique
+        return results
+
+    def _can_decompose_into_known(self, chunk: str, dictionary: set) -> bool:
+        n = len(chunk)
+        if n <= 2:
+            return False
+        dp = [False] * (n + 1)
+        dp[0] = True
+        for i in range(1, n + 1):
+            for length in range(2, min(5, i + 1)):
+                if dp[i - length] and chunk[i - length:i] in dictionary:
+                    dp[i] = True
+                    break
+        return dp[n]
 
     async def detect_zero_day_terms(self, text: str) -> List:
         if not self._trained:
@@ -491,7 +815,7 @@ class ZeroDayDetector:
 
         known_terms = set(self.blacktalk_engine._term_index.keys())
         candidates = self._detect_unknown_terms(text)
-        chinese_candidates = self._detect_chinese_unknown_terms(text)
+        chinese_candidates = self._detect_chinese_zero_day_terms(text)
 
         seen = set()
         unique_candidates = []

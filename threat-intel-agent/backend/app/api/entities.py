@@ -67,13 +67,39 @@ async def search_entities(
             items = []
             for r in vs_results:
                 metadata = r.get("metadata", {})
+                doc = r.get("document", "")
+                entity_value = (
+                    metadata.get("entity_value")
+                    or metadata.get("value")
+                    or metadata.get("name")
+                    or metadata.get("title")
+                    or metadata.get("indicator")
+                    or (doc[:50].strip() if doc else "")
+                )
+                entity_type = (
+                    metadata.get("entity_type")
+                    or metadata.get("type")
+                    or metadata.get("ioc_type")
+                    or metadata.get("threat_type")
+                    or metadata.get("breach_type")
+                    or metadata.get("exploit_type")
+                    or metadata.get("file_type")
+                    or metadata.get("species")
+                    or metadata.get("category")
+                    or metadata.get("source_type")
+                    or metadata.get("source")
+                    or "unknown"
+                )
+                distance = r.get("distance")
+                score = 1.0 - distance if distance is not None else None
                 items.append({
                     "id": r.get("id", ""),
-                    "type": metadata.get("type", "unknown"),
-                    "value": metadata.get("value", ""),
-                    "document": r.get("document", ""),
+                    "type": entity_type,
+                    "value": entity_value,
+                    "document": doc,
                     "metadata": metadata,
-                    "distance": r.get("distance"),
+                    "distance": distance,
+                    "score": score,
                 })
             return {"items": items, "total": len(items), "offset": offset, "limit": limit}
     except Exception as exc:

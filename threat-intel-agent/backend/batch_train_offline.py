@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1190,7 +1191,7 @@ async def main():
     from app.core.attack_chain_predictor import AttackChainPredictor
     from app.core.entity_attribution import EntityAttribution
     from app.core.temporal_decay import TemporalDecay
-    from app.core.intelligence_organism import IntelligenceOrganismEngine
+    from app.core.intelligence_organism import IntelligenceOrganismEngine, EXPECTED_MENTIONS_PER_HOUR, DEATH_THRESHOLD
     from app.core.provenance_chain import ProvenanceChain
 
     llm = LLMService()
@@ -1679,8 +1680,34 @@ async def main():
     await organism_engine.save_to_disk()
     print(f"  ✅ IntelligenceOrganism: {organism_count} 个生命体已生成")
 
+    for oid, org in organism_engine.organisms.items():
+        hours = random.uniform(1, 2160)
+        org.current_age_hours = hours
+        org.born_at = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    for oid, org in organism_engine.organisms.items():
+        hours = org.current_age_hours
+        simulated_mentions = max(1, int(EXPECTED_MENTIONS_PER_HOUR.get(org.species, 0.01) * hours * random.uniform(0.1, 2.0)))
+        org.mention_count = simulated_mentions
+        org.total_use_count = max(1, int(simulated_mentions * random.uniform(0.2, 0.95)))
+        org.confirmed_use_count = max(0, int(org.total_use_count * random.uniform(0.05, 0.95)))
+        freshness = 0.5 ** (hours / org.half_life) if org.half_life > 0 else 0.0
+        expected_mentions = EXPECTED_MENTIONS_PER_HOUR.get(org.species, 0.01) * hours
+        activity = min(org.mention_count / max(expected_mentions, 1), 1.0) if expected_mentions > 0 else 0.5
+        relevance = 0.5
+        if org.total_use_count > 0:
+            relevance = min(org.confirmed_use_count / org.total_use_count, 1.0)
+        org.vitality = freshness * activity * relevance
+        org.is_alive = org.vitality >= DEATH_THRESHOLD
+    await organism_engine.save_to_disk()
+    print(f"  ✅ 时间模拟完成，活力已重新计算")
+
     alive = sum(1 for o in organism_engine.organisms.values() if o.is_alive)
-    print(f"    存活: {alive} (全部应为存活状态，刚创建)")
+    print(f"    存活: {alive}")
+
+    vitality_values = [o.vitality for o in organism_engine.organisms.values()]
+    if vitality_values:
+        print(f"    活力范围: {min(vitality_values):.3f} ~ {max(vitality_values):.3f}")
+        print(f"    平均活力: {sum(vitality_values) / len(vitality_values):.3f}")
 
     species_dist = {}
     for o in organism_engine.organisms.values():

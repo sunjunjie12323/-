@@ -1,0 +1,344 @@
+{
+  "rules": {
+    "rule-critical-threat": {
+      "rule_id": "rule-critical-threat",
+      "name": "高危威胁检测",
+      "description": "检测到critical级别威胁情报",
+      "conditions": {
+        "threat_level": "critical"
+      },
+      "severity": "critical",
+      "enabled": true,
+      "cooldown_minutes": 30,
+      "last_triggered": "2026-05-11T01:37:35.449300+00:00"
+    },
+    "rule-zero-day": {
+      "rule_id": "rule-zero-day",
+      "name": "零日漏洞检测",
+      "description": "检测到零日漏洞相关情报",
+      "conditions": {
+        "keyword": "0day,zero-day,零日,CVE-2024,CVE-2025"
+      },
+      "severity": "critical",
+      "enabled": true,
+      "cooldown_minutes": 60,
+      "last_triggered": "2026-05-11T01:37:35.449325+00:00"
+    },
+    "rule-ransomware": {
+      "rule_id": "rule-ransomware",
+      "name": "勒索软件检测",
+      "description": "检测到勒索软件相关情报",
+      "conditions": {
+        "keyword": "ransomware,勒索,LockBit,BlackCat,ALPHV"
+      },
+      "severity": "high",
+      "enabled": true,
+      "cooldown_minutes": 120,
+      "last_triggered": null
+    },
+    "rule-apt": {
+      "rule_id": "rule-apt",
+      "name": "APT攻击检测",
+      "description": "检测到APT组织活动",
+      "conditions": {
+        "keyword": "APT,advanced persistent threat,国家级攻击"
+      },
+      "severity": "high",
+      "enabled": true,
+      "cooldown_minutes": 240,
+      "last_triggered": "2026-05-11T01:37:35.449371+00:00"
+    },
+    "rule-supply-chain": {
+      "rule_id": "rule-supply-chain",
+      "name": "供应链攻击检测",
+      "description": "检测到供应链攻击",
+      "conditions": {
+        "keyword": "supply chain,供应链,dependency"
+      },
+      "severity": "high",
+      "enabled": true,
+      "cooldown_minutes": 120,
+      "last_triggered": null
+    },
+    "rule-darkweb-sale": {
+      "rule_id": "rule-darkweb-sale",
+      "name": "暗网交易检测",
+      "description": "检测到暗网数据/工具出售",
+      "conditions": {
+        "keyword": "暗网,darknet,sale,出售,贩卖"
+      },
+      "severity": "medium",
+      "enabled": true,
+      "cooldown_minutes": 180,
+      "last_triggered": "2026-05-11T01:37:35.449389+00:00"
+    },
+    "rule-data-breach": {
+      "rule_id": "rule-data-breach",
+      "name": "数据泄露检测",
+      "description": "检测到数据泄露事件",
+      "conditions": {
+        "keyword": "data breach,数据泄露,信息泄露"
+      },
+      "severity": "high",
+      "enabled": true,
+      "cooldown_minutes": 60,
+      "last_triggered": null
+    },
+    "rule-botnet": {
+      "rule_id": "rule-botnet",
+      "name": "僵尸网络检测",
+      "description": "检测到僵尸网络活动",
+      "conditions": {
+        "keyword": "botnet,僵尸网络,C2,command and control"
+      },
+      "severity": "medium",
+      "enabled": true,
+      "cooldown_minutes": 240,
+      "last_triggered": null
+    }
+  },
+  "active_alerts": {
+    "7a8fe072a8cbf48f": {
+      "alert_id": "7a8fe072a8cbf48f",
+      "rule_id": "rule-critical-threat",
+      "rule_name": "高危威胁检测",
+      "severity": "critical",
+      "title": "[高危威胁检测] CVE-2025-0001",
+      "description": "规则'高危威胁检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764185+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "b898685e30a1c6d3": {
+      "alert_id": "b898685e30a1c6d3",
+      "rule_id": "rule-zero-day",
+      "rule_name": "零日漏洞检测",
+      "severity": "critical",
+      "title": "[零日漏洞检测] CVE-2025-0001",
+      "description": "规则'零日漏洞检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764216+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "c471afce80cb7482": {
+      "alert_id": "c471afce80cb7482",
+      "rule_id": "rule-apt",
+      "rule_name": "APT攻击检测",
+      "severity": "high",
+      "title": "[APT攻击检测] CVE-2025-0001",
+      "description": "规则'APT攻击检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764236+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "a735403875d8e00b": {
+      "alert_id": "a735403875d8e00b",
+      "rule_id": "rule-darkweb-sale",
+      "rule_name": "暗网交易检测",
+      "severity": "medium",
+      "title": "[暗网交易检测] CVE-2025-0001",
+      "description": "规则'暗网交易检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764253+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "85c208daf3c05e27": {
+      "alert_id": "85c208daf3c05e27",
+      "rule_id": "rule-critical-threat",
+      "rule_name": "高危威胁检测",
+      "severity": "critical",
+      "title": "[高危威胁检测] CVE-2025-0001",
+      "description": "规则'高危威胁检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449292+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "bd9396ad43f1fadf": {
+      "alert_id": "bd9396ad43f1fadf",
+      "rule_id": "rule-zero-day",
+      "rule_name": "零日漏洞检测",
+      "severity": "critical",
+      "title": "[零日漏洞检测] CVE-2025-0001",
+      "description": "规则'零日漏洞检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449321+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "acb7efa452541ba3": {
+      "alert_id": "acb7efa452541ba3",
+      "rule_id": "rule-apt",
+      "rule_name": "APT攻击检测",
+      "severity": "high",
+      "title": "[APT攻击检测] CVE-2025-0001",
+      "description": "规则'APT攻击检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449367+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    "5389b4b7d9ec5d42": {
+      "alert_id": "5389b4b7d9ec5d42",
+      "rule_id": "rule-darkweb-sale",
+      "rule_name": "暗网交易检测",
+      "severity": "medium",
+      "title": "[暗网交易检测] CVE-2025-0001",
+      "description": "规则'暗网交易检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449385+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    }
+  },
+  "alert_history": [
+    {
+      "alert_id": "7a8fe072a8cbf48f",
+      "rule_id": "rule-critical-threat",
+      "rule_name": "高危威胁检测",
+      "severity": "critical",
+      "title": "[高危威胁检测] CVE-2025-0001",
+      "description": "规则'高危威胁检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764185+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "b898685e30a1c6d3",
+      "rule_id": "rule-zero-day",
+      "rule_name": "零日漏洞检测",
+      "severity": "critical",
+      "title": "[零日漏洞检测] CVE-2025-0001",
+      "description": "规则'零日漏洞检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764216+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "c471afce80cb7482",
+      "rule_id": "rule-apt",
+      "rule_name": "APT攻击检测",
+      "severity": "high",
+      "title": "[APT攻击检测] CVE-2025-0001",
+      "description": "规则'APT攻击检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764236+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "a735403875d8e00b",
+      "rule_id": "rule-darkweb-sale",
+      "rule_name": "暗网交易检测",
+      "severity": "medium",
+      "title": "[暗网交易检测] CVE-2025-0001",
+      "description": "规则'暗网交易检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-48847c6c",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:35:19.764253+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "85c208daf3c05e27",
+      "rule_id": "rule-critical-threat",
+      "rule_name": "高危威胁检测",
+      "severity": "critical",
+      "title": "[高危威胁检测] CVE-2025-0001",
+      "description": "规则'高危威胁检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449292+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "bd9396ad43f1fadf",
+      "rule_id": "rule-zero-day",
+      "rule_name": "零日漏洞检测",
+      "severity": "critical",
+      "title": "[零日漏洞检测] CVE-2025-0001",
+      "description": "规则'零日漏洞检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449321+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "acb7efa452541ba3",
+      "rule_id": "rule-apt",
+      "rule_name": "APT攻击检测",
+      "severity": "high",
+      "title": "[APT攻击检测] CVE-2025-0001",
+      "description": "规则'APT攻击检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449367+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    },
+    {
+      "alert_id": "5389b4b7d9ec5d42",
+      "rule_id": "rule-darkweb-sale",
+      "rule_name": "暗网交易检测",
+      "severity": "medium",
+      "title": "[暗网交易检测] CVE-2025-0001",
+      "description": "规则'暗网交易检测'触发: 检测到新的零日漏洞CVE-2025-0001，已被APT组织在暗网出售利用工具",
+      "intelligence_id": "test-d4489e6a",
+      "entity_value": "CVE-2025-0001",
+      "entity_type": "vulnerability",
+      "threat_level": "critical",
+      "timestamp": "2026-05-11T01:37:35.449385+00:00",
+      "acknowledged": false,
+      "notification_sent": {}
+    }
+  ]
+}

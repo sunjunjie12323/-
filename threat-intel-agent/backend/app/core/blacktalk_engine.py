@@ -68,7 +68,7 @@ class BlackTalkEngine:
     AUTO_LEARN_CONFIDENCE_THRESHOLD = 0.7
     SEMANTIC_SEARCH_THRESHOLD = 0.35
 
-    def __init__(self, llm: LLMService, vector_store: VectorStore):
+    def __init__(self, vector_store: VectorStore, llm: Optional[LLMService] = None):
         self.llm = llm
         self.vector_store = vector_store
         self._dictionary: Dict[str, BlackTalkTerm] = {}

@@ -16,6 +16,7 @@ from .tasks import router as tasks_router
 from .temporal_decay import router as temporal_decay_router
 from .zero_day import router as zero_day_router
 from .organism import router as organism_router
+from .alerts import router as alerts_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -34,3 +35,4 @@ api_router.include_router(provenance_router)
 api_router.include_router(attribution_router)
 api_router.include_router(temporal_decay_router)
 api_router.include_router(organism_router)
+api_router.include_router(alerts_router)
